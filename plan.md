@@ -10,24 +10,48 @@
 - [x] Introduire des erreurs typées et préserver les causes d'I/O, de parsing et de génération.
 - [x] Ajouter des tests de régression couvrant les chemins et noms de fichiers contenant des caractères spéciaux.
 
-### Validation Phase 1
-
-Les tests unitaires et de régression ont été ajoutés. La validation `cargo test` n'a pas pu être exécutée dans l'environnement d'outillage utilisé pour cette session, car `cargo`/`rustc` ne sont pas disponibles localement et l'accès réseau direct est indisponible.
-
 ## Phase 2 — Qualité
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy -- -D warnings`
-- [ ] GitHub Actions pour format, clippy, tests et build.
+- [x] `cargo fmt --check`
+- [x] `cargo clippy -- -D warnings`
+- [x] GitHub Actions pour format, clippy, tests et build.
 - [ ] Tests d'intégration du pipeline complet de génération.
 - [ ] Fixtures PE/ELF réels pour les tests déterministes.
 
 ## Phase 3 — Architecture
 
-- [ ] Introduire un domaine explicite pour la cible de jeu et le runner.
-- [ ] Isoler le pipeline de setup des générateurs de fichiers.
-- [ ] Versionner le modèle de configuration YAML.
-- [ ] Découpler détection, collecte de métadonnées et génération.
+- [x] Introduire un domaine explicite pour la cible de jeu et le runner.
+- [x] Isoler le pipeline de setup des générateurs de fichiers.
+- [x] Versionner le modèle de configuration YAML.
+- [x] Découpler détection, collecte de métadonnées et génération.
+
+### Structure implémentée
+
+```text
+src/
+├── domain/
+│   ├── binary.rs
+│   ├── game.rs
+│   ├── runner.rs
+│   └── mod.rs
+├── pipeline/
+│   ├── detect.rs
+│   ├── metadata.rs
+│   ├── setup.rs
+│   └── mod.rs
+├── generators/
+│   ├── config.rs
+│   ├── desktop.rs
+│   ├── icon.rs
+│   ├── launcher.rs
+│   └── mod.rs
+└── compatibility facades
+    ├── config.rs
+    ├── icon.rs
+    └── launcher.rs
+```
+
+Les façades historiques conservent les points d'entrée publics de la v0.1.0 tout en déléguant vers les nouveaux modules.
 
 ## Phase 4 — Fonctionnalités
 
@@ -40,4 +64,4 @@ Les tests unitaires et de régression ont été ajoutés. La validation `cargo t
 
 ## Ordre d'exécution
 
-La Phase 1 doit être terminée et validée avant d'entamer la Phase 2. Les Phases 3 et 4 doivent conserver la compatibilité comportementale obtenue pendant les phases précédentes, sauf changement explicitement documenté.
+La Phase 1 et la Phase 2 doivent rester stables avant d'étendre les fonctionnalités de la Phase 4. La Phase 3 sert de fondation aux extensions futures et conserve la compatibilité comportementale obtenue pendant les phases précédentes.
