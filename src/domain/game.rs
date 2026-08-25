@@ -57,7 +57,11 @@ impl LaunchOptions {
             }
         }
 
-        if self.wrappers.iter().any(|wrapper| wrapper.trim().is_empty()) {
+        if self
+            .wrappers
+            .iter()
+            .any(|wrapper| wrapper.trim().is_empty())
+        {
             return Err(crate::error::KalesaError::InvalidDesktopValue(
                 "launch wrapper cannot be empty".into(),
             ));
