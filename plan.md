@@ -25,7 +25,7 @@
 - [x] Versionner le modèle de configuration YAML.
 - [x] Découpler détection, collecte de métadonnées et génération.
 
-### Structure cible Phase 3
+### Structure implémentée
 
 ```text
 src/
@@ -51,6 +51,8 @@ src/
     └── launcher.rs
 ```
 
+Les façades historiques conservent les points d'entrée publics de la v0.1.0 tout en déléguant vers les nouveaux modules.
+
 ## Phase 4 — Fonctionnalités
 
 - [ ] Support AppImage.
@@ -62,4 +64,4 @@ src/
 
 ## Ordre d'exécution
 
-La Phase 1 et la Phase 2 doivent rester stables avant d'étendre les fonctionnalités de la Phase 4. La Phase 3 sert de fondation aux extensions futures et doit conserver la compatibilité comportementale obtenue pendant les phases précédentes.
+La Phase 1 et la Phase 2 doivent rester stables avant d'étendre les fonctionnalités de la Phase 4. La Phase 3 sert de fondation aux extensions futures et conserve la compatibilité comportementale obtenue pendant les phases précédentes.
