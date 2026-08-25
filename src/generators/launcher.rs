@@ -90,7 +90,7 @@ yaml_nested_scalar() {{
             sub(/[[:space:]]+$/, "", value)
             if (value == "null") return ""
             if (value ~ /^\x27.*\x27$/) return substr(value, 2, length(value) - 2)
-            if (value ~ /^\".*\"$/) return substr(value, 2, length(value) - 2)
+            if (value ~ /^".*"$/) return substr(value, 2, length(value) - 2)
             return value
         }}
         /^[^[:space:]][^:]*:/ {{
