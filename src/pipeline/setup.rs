@@ -3,7 +3,9 @@ use std::path::{Path, PathBuf};
 
 use log::{info, warn};
 
-use crate::domain::{BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner, RunnerBackend};
+use crate::domain::{
+    BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner, RunnerBackend,
+};
 use crate::error::{KalesaError, Result};
 use crate::generators::{config, desktop, icon, launcher};
 use crate::pipeline::{detect, metadata};
@@ -36,10 +38,10 @@ pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()>
     validate_target(target_path)?;
     options.launch.validate()?;
 
-    let canonical_target = fs::canonicalize(target_path)
-        .map_err(|e| KalesaError::io("canonicalizing target", e))?;
-    let current_dir = std::env::current_dir()
-        .map_err(|e| KalesaError::io("reading current directory", e))?;
+    let canonical_target =
+        fs::canonicalize(target_path).map_err(|e| KalesaError::io("canonicalizing target", e))?;
+    let current_dir =
+        std::env::current_dir().map_err(|e| KalesaError::io("reading current directory", e))?;
 
     let binary_type = detect::detect(&canonical_target)?;
     let target = GameTarget::new(canonical_target.clone(), binary_type);
@@ -60,11 +62,18 @@ pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()>
     let workdir = WorkDir::new();
     workdir.create()?;
 
-    let icon_path = materialize_icon(&target, &game_metadata, options.icon.is_some(), &workdir)?;
+    let icon_path =
+        materialize_icon(&target, &game_metadata, options.icon.is_some(), &workdir)?;
     game_metadata.icon_path = icon_path;
 
     let config_path = workdir.config.join("config.yaml");
-    config::write(&config_path, &target, &game_metadata, &runner, &options.launch)?;
+    config::write(
+        &config_path,
+        &target,
+        &game_metadata,
+        &runner,
+        &options.launch,
+    )?;
 
     let launch_path = workdir.bin.join("launch.sh");
     launcher::write(&launch_path, &target, &runner, &options.launch)?;
@@ -120,8 +129,8 @@ fn materialize_icon(
 ) -> Result<Option<PathBuf>> {
     if target.binary_type == BinaryType::WindowsPe && !explicit_icon {
         let destination = workdir.icons.join("game_icon.png");
-        let contents = fs::read(&target.path)
-            .map_err(|e| KalesaError::io("reading PE icon resources", e))?;
+        let contents =
+            fs::read(&target.path).map_err(|e| KalesaError::io("reading PE icon resources", e))?;
         if icon::extract_pe_icon(&contents, &destination) {
             info!("Extracted icon from PE resources to {:?}", destination);
             return Ok(Some(destination));
@@ -131,19 +140,24 @@ fn materialize_icon(
     }
 
     let Some(found) = game_metadata.icon_path.as_deref() else {
-        warn!("No usable icon found for {:?}; using theme fallback", target.path);
+        warn!(
+            "No usable icon found for {:?}; using theme fallback",
+            target.path
+        );
         return Ok(None);
     };
 
     if !found.is_file() {
-        warn!("Configured icon {:?} does not exist; using theme fallback", found);
+        warn!(
+            "Configured icon {:?} does not exist; using theme fallback",
+            found
+        );
         return Ok(None);
     }
 
     let ext = found.extension().and_then(|e| e.to_str()).unwrap_or("png");
     let destination = workdir.icons.join(format!("game_icon.{ext}"));
-    fs::copy(found, &destination)
-        .map_err(|e| KalesaError::io("copying game icon", e))?;
+    fs::copy(found, &destination).map_err(|e| KalesaError::io("copying game icon", e))?;
     info!("Copied icon {:?} to {:?}", found, destination);
     Ok(Some(destination))
 }
