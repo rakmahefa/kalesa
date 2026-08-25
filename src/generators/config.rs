@@ -70,7 +70,10 @@ pub fn write(
         prefix: prefix.clone(),
         arch: "win64".to_string(),
     });
-    let proton = runner.proton_path.as_ref().map(|path| ProtonConfig { path: path.clone() });
+    let proton = runner
+        .proton_path
+        .as_ref()
+        .map(|path| ProtonConfig { path: path.clone() });
 
     let app_config = AppConfig {
         schema_version: CONFIG_SCHEMA_VERSION,
@@ -101,7 +104,8 @@ pub fn write(
     };
 
     let yaml = serde_yaml::to_string(&app_config)?;
-    let mut file = File::create(path).map_err(|e| KalesaError::io("creating configuration", e))?;
+    let mut file =
+        File::create(path).map_err(|e| KalesaError::io("creating configuration", e))?;
     file.write_all(yaml.as_bytes())
         .map_err(|e| KalesaError::io("writing configuration", e))?;
     Ok(())
