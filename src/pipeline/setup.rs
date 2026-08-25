@@ -3,9 +3,7 @@ use std::path::{Path, PathBuf};
 
 use log::{info, warn};
 
-use crate::domain::{
-    BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner, RunnerBackend,
-};
+use crate::domain::{BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner, RunnerBackend};
 use crate::error::{KalesaError, Result};
 use crate::generators::{config, desktop, icon, launcher};
 use crate::pipeline::{detect, metadata};
@@ -62,8 +60,7 @@ pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()>
     let workdir = WorkDir::new();
     workdir.create()?;
 
-    let icon_path =
-        materialize_icon(&target, &game_metadata, options.icon.is_some(), &workdir)?;
+    let icon_path = materialize_icon(&target, &game_metadata, options.icon.is_some(), &workdir)?;
     game_metadata.icon_path = icon_path;
 
     let config_path = workdir.config.join("config.yaml");
