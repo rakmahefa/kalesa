@@ -112,8 +112,7 @@ pub fn write_with_metadata(
 
     write_if_allowed(&output_dir.join("game.desktop"), &desktop_content, force)?;
 
-    let directory_content =
-        format!("[Desktop Entry]\nType=Directory\nName={name}\nIcon={icon}\n");
+    let directory_content = format!("[Desktop Entry]\nType=Directory\nName={name}\nIcon={icon}\n");
     write_if_allowed(&output_dir.join(".directory"), &directory_content, force)?;
     Ok(())
 }
@@ -126,8 +125,7 @@ fn write_if_allowed(path: &Path, content: &str, force: bool) -> Result<()> {
         );
         return Ok(());
     }
-    let mut file =
-        File::create(path).map_err(|e| KalesaError::io("creating desktop entry", e))?;
+    let mut file = File::create(path).map_err(|e| KalesaError::io("creating desktop entry", e))?;
     file.write_all(content.as_bytes())
         .map_err(|e| KalesaError::io("writing desktop entry", e))?;
     info!("Generated {:?}", path);
