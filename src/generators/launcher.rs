@@ -2,7 +2,7 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
-use crate::domain::{LaunchOptions, Runner, RunnerKind};
+use crate::domain::{LaunchOptions, Runner};
 use crate::error::{KalesaError, Result};
 use crate::{GameMetadata, GameTarget};
 
@@ -406,8 +406,8 @@ exec "${COMMAND[@]}"
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{BinaryType, GameTarget, LaunchOptions, RunnerBackend};
     use crate::GameMetadata;
+    use crate::domain::{BinaryType, GameTarget, LaunchOptions, RunnerBackend};
     use std::fs;
     use std::path::PathBuf;
 
@@ -417,7 +417,8 @@ mod tests {
         fs::create_dir_all(root.join(".workdir/bin")).unwrap();
         let launcher = root.join(".workdir/bin/launch.sh");
         let target = GameTarget::new(PathBuf::from("/ignored/game.exe"), BinaryType::WindowsPe);
-        let runner = Runner::for_target_with_backend(&target, &root, RunnerBackend::Wine, None, None);
+        let runner =
+            Runner::for_target_with_backend(&target, &root, RunnerBackend::Wine, None, None);
 
         write(
             &launcher,
