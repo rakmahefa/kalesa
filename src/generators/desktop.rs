@@ -1,7 +1,7 @@
 use log::{info, warn};
 use std::fs::File;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::domain::GameMetadata;
 use crate::error::{KalesaError, Result};
@@ -37,6 +37,22 @@ fn desktop_value_escape(value: &str) -> Result<String> {
     Ok(value.replace('\\', "\\\\"))
 }
 
+fn desktop_icon_path(path: &Path, current_dir: &Path) -> Result<PathBuf> {
+    let resolved = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        current_dir.join(path)
+    };
+
+    if resolved.to_str().is_none() {
+        return Err(KalesaError::InvalidDesktopValue(
+            "icon path is not valid UTF-8".into(),
+        ));
+    }
+
+    Ok(resolved)
+}
+
 pub fn write(
     game_name: &str,
     current_dir: &Path,
@@ -62,9 +78,12 @@ pub fn write_with_metadata(
     let launcher_path = current_dir.join(".workdir/bin/launch.sh");
     let exec = desktop_exec_quote(&launcher_path)?;
     let icon = match metadata.icon_path.as_deref() {
-        Some(path) => desktop_value_escape(path.to_str().ok_or_else(|| {
-            KalesaError::InvalidDesktopValue("icon path is not valid UTF-8".into())
-        })?)?,
+        Some(path) => {
+            let path = desktop_icon_path(path, current_dir)?;
+            desktop_value_escape(path.to_str().ok_or_else(|| {
+                KalesaError::InvalidDesktopValue("icon path is not valid UTF-8".into())
+            })?)?
+        }
         None => "applications-games".to_string(),
     };
 
@@ -130,4 +149,61 @@ fn write_if_allowed(path: &Path, content: &str, force: bool) -> Result<()> {
         .map_err(|e| KalesaError::io("writing desktop entry", e))?;
     info!("Generated {:?}", path);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "kalesa_desktop_test_{label}_{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn resolves_relative_icon_path_to_absolute_path() {
+        let current_dir = PathBuf::from("/tmp/kalesa-test");
+        let relative = Path::new(".workdir/icons/game_icon.png");
+        let resolved = desktop_icon_path(relative, &current_dir).unwrap();
+        assert_eq!(
+            resolved,
+            PathBuf::from("/tmp/kalesa-test/.workdir/icons/game_icon.png")
+        );
+    }
+
+    #[test]
+    fn preserves_absolute_icon_path() {
+        let current_dir = PathBuf::from("/tmp/kalesa-test");
+        let absolute = Path::new("/opt/games/icons/game_icon.png");
+        let resolved = desktop_icon_path(absolute, &current_dir).unwrap();
+        assert_eq!(resolved, absolute);
+    }
+
+    #[test]
+    fn writes_absolute_icon_path_to_desktop_entries() {
+        let dir = temp_dir("absolute_icon");
+        let icon_path = Path::new(".workdir/icons/game_icon.png");
+        let metadata = GameMetadata {
+            name: "ChildofLight".to_string(),
+            icon_path: Some(icon_path.to_path_buf()),
+            ..GameMetadata::default()
+        };
+
+        write_with_metadata(&metadata, &dir, &dir, true).unwrap();
+
+        let desktop = fs::read_to_string(dir.join("game.desktop")).unwrap();
+        let directory = fs::read_to_string(dir.join(".directory")).unwrap();
+        let expected = format!("Icon={}/.workdir/icons/game_icon.png", dir.display());
+
+        assert!(desktop.contains(&expected), "desktop content: {desktop}");
+        assert!(directory.contains(&expected), "directory content: {directory}");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
