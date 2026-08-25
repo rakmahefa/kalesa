@@ -68,10 +68,17 @@ mod tests {
     use std::fs;
     use std::io::Write as _;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    static TEMP_DIR_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
     fn write_temp(name: &str, bytes: &[u8]) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("kalesa_detect_{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
+        let counter = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!(
+            "kalesa_detect_{}_{}",
+            std::process::id(),
+            counter
+        ));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join(name);
         let mut file = fs::File::create(&path).unwrap();
