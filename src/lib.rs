@@ -5,12 +5,14 @@ pub mod generators;
 pub mod icon;
 pub mod launcher;
 pub mod pipeline;
+pub mod runtime;
 
 pub use domain::{
     BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner, RunnerBackend, RunnerKind,
 };
 pub use pipeline::detect::detect_binary_type;
 pub use pipeline::{SetupOptions, run as run_setup, run_with_options as run_setup_with_options};
+pub use runtime::run as run_from_config;
 
 #[cfg(test)]
 mod tests {
