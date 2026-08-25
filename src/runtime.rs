@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -11,7 +10,6 @@ use crate::pipeline::detect;
 
 #[derive(Debug, Clone)]
 struct RuntimeContext {
-    config_path: PathBuf,
     game_dir: PathBuf,
     config: AppConfig,
     target: PathBuf,
@@ -20,12 +18,13 @@ struct RuntimeContext {
 pub fn run(config_path: &Path, extra_args: &[String]) -> Result<()> {
     let context = load(config_path)?;
     let command = build_command(&context, extra_args)?;
+    validate_programs(&context)?;
 
     let mut process = Command::new(&command[0]);
     process.args(&command[1..]);
     process.current_dir(&context.game_dir);
     process.envs(&context.config.launch.env);
-    apply_runner_environment(&mut process, &context)?;
+    apply_runner_environment(&mut process, &context);
 
     let rendered = render_command(&command);
     println!("[+] Launching {}: {}", context.config.name, rendered);
@@ -47,15 +46,15 @@ fn load(config_path: &Path) -> Result<RuntimeContext> {
 
     validate_config(&config)?;
 
-    let config_dir = config_path
-        .parent()
-        .ok_or_else(|| KalesaError::InvalidRuntimeConfig("configuration has no parent directory".into()))?;
-    let workdir = config_dir
-        .parent()
-        .ok_or_else(|| KalesaError::InvalidRuntimeConfig("configuration is not inside .workdir/config".into()))?;
-    let game_dir = workdir
-        .parent()
-        .ok_or_else(|| KalesaError::InvalidRuntimeConfig("configuration is not inside a game directory".into()))?;
+    let config_dir = config_path.parent().ok_or_else(|| {
+        KalesaError::InvalidRuntimeConfig("configuration has no parent directory".into())
+    })?;
+    let workdir = config_dir.parent().ok_or_else(|| {
+        KalesaError::InvalidRuntimeConfig("configuration is not inside .workdir/config".into())
+    })?;
+    let game_dir = workdir.parent().ok_or_else(|| {
+        KalesaError::InvalidRuntimeConfig("configuration is not inside a game directory".into())
+    })?;
 
     let target = resolve_path(game_dir, &config.executable.path);
     if !target.is_file() {
@@ -66,7 +65,6 @@ fn load(config_path: &Path) -> Result<RuntimeContext> {
     validate_runner_target(&config.runner.runner_type, binary_type)?;
 
     Ok(RuntimeContext {
-        config_path,
         game_dir: game_dir.to_path_buf(),
         config,
         target,
@@ -131,9 +129,11 @@ fn validate_config(config: &AppConfig) -> Result<()> {
     }
 
     if config.runner.runner_type == "proton" {
-        let proton = config.runner.proton.as_ref().ok_or_else(|| {
-            KalesaError::MissingProtonPath
-        })?;
+        let proton = config
+            .runner
+            .proton
+            .as_ref()
+            .ok_or(KalesaError::MissingProtonPath)?;
         if proton.path.as_os_str().is_empty() {
             return Err(KalesaError::MissingProtonPath);
         }
@@ -154,33 +154,35 @@ fn validate_runner_target(runner: &str, binary_type: BinaryType) -> Result<()> {
 
 fn build_command(context: &RuntimeContext, extra_args: &[String]) -> Result<Vec<String>> {
     let mut command = Vec::with_capacity(
-        context.config.launch.wrappers.len() + context.config.launch.args.len() + 4 + extra_args.len(),
+        context.config.launch.wrappers.len()
+            + context.config.launch.args.len()
+            + 4
+            + extra_args.len(),
     );
 
     for wrapper in &context.config.launch.wrappers {
-        let resolved = resolve_program(&context.game_dir, wrapper).ok_or_else(|| {
-            KalesaError::InvalidRuntimeConfig(format!("launcher wrapper not found: {wrapper}"))
-        })?;
-        command.push(resolved.to_string_lossy().into_owned());
+        if wrapper.contains('/') {
+            let resolved = resolve_path(&context.game_dir, Path::new(wrapper));
+            command.push(resolved.to_string_lossy().into_owned());
+        } else {
+            command.push(wrapper.clone());
+        }
     }
 
     match context.config.runner.runner_type.as_str() {
         "native" => command.push(context.target.to_string_lossy().into_owned()),
         "wine" => {
-            command.push(find_on_path("wine").ok_or_else(|| {
-                KalesaError::InvalidRuntimeConfig("wine was not found in PATH".into())
-            })?);
+            command.push("wine".into());
             command.push(context.target.to_string_lossy().into_owned());
         }
         "proton" => {
-            let proton = context.config.runner.proton.as_ref().expect("validated proton config");
+            let proton = context
+                .config
+                .runner
+                .proton
+                .as_ref()
+                .ok_or(KalesaError::MissingProtonPath)?;
             let proton_path = resolve_path(&context.game_dir, &proton.path);
-            if !proton_path.is_file() {
-                return Err(KalesaError::InvalidRuntimeConfig(format!(
-                    "Proton executable not found: {}",
-                    proton_path.display()
-                )));
-            }
             command.push(proton_path.to_string_lossy().into_owned());
             command.push("run".into());
             command.push(context.target.to_string_lossy().into_owned());
@@ -197,21 +199,73 @@ fn build_command(context: &RuntimeContext, extra_args: &[String]) -> Result<Vec<
     Ok(command)
 }
 
-fn apply_runner_environment(process: &mut Command, context: &RuntimeContext) -> Result<()> {
-    if matches!(context.config.runner.runner_type.as_str(), "wine" | "proton") {
-        let wine = context.config.runner.wine.as_ref().expect("validated wine config");
-        process.env("WINEPREFIX", resolve_path(&context.game_dir, &wine.prefix));
-        process.env("WINEARCH", &wine.arch);
+fn validate_programs(context: &RuntimeContext) -> Result<()> {
+    for wrapper in &context.config.launch.wrappers {
+        let resolved = if wrapper.contains('/') {
+            resolve_path(&context.game_dir, Path::new(wrapper))
+        } else {
+            find_on_path(wrapper).map(PathBuf::from).ok_or_else(|| {
+                KalesaError::InvalidRuntimeConfig(format!(
+                    "launcher wrapper not found in PATH: {wrapper}"
+                ))
+            })?
+        };
+        if !resolved.is_file() || !is_executable(&resolved) {
+            return Err(KalesaError::InvalidRuntimeConfig(format!(
+                "launcher wrapper is not executable: {}",
+                resolved.display()
+            )));
+        }
     }
+
+    match context.config.runner.runner_type.as_str() {
+        "native" => {
+            if !is_executable(&context.target) {
+                return Err(KalesaError::InvalidRuntimeConfig(format!(
+                    "game executable is not executable: {}",
+                    context.target.display()
+                )));
+            }
+        }
+        "wine" => {
+            if find_on_path("wine").is_none() {
+                return Err(KalesaError::InvalidRuntimeConfig(
+                    "wine was not found in PATH".into(),
+                ));
+            }
+        }
+        "proton" => {
+            let proton = context
+                .config
+                .runner
+                .proton
+                .as_ref()
+                .ok_or(KalesaError::MissingProtonPath)?;
+            let proton_path = resolve_path(&context.game_dir, &proton.path);
+            if !proton_path.is_file() || !is_executable(&proton_path) {
+                return Err(KalesaError::InvalidRuntimeConfig(format!(
+                    "Proton executable not found or not executable: {}",
+                    proton_path.display()
+                )));
+            }
+        }
+        _ => unreachable!("runner type validated before program validation"),
+    }
+
     Ok(())
 }
 
-fn resolve_program(game_dir: &Path, value: &str) -> Option<PathBuf> {
-    if value.contains('/') {
-        let path = resolve_path(game_dir, Path::new(value));
-        return path.is_file().then_some(path);
+fn apply_runner_environment(process: &mut Command, context: &RuntimeContext) {
+    if matches!(context.config.runner.runner_type.as_str(), "wine" | "proton") {
+        let wine = context
+            .config
+            .runner
+            .wine
+            .as_ref()
+            .expect("validated wine config");
+        process.env("WINEPREFIX", resolve_path(&context.game_dir, &wine.prefix));
+        process.env("WINEARCH", &wine.arch);
     }
-    find_on_path(value).map(PathBuf::from)
 }
 
 fn find_on_path(program: &str) -> Option<String> {
@@ -280,6 +334,7 @@ fn exit_status_result(status: ExitStatus, command: String) -> Result<()> {
 mod tests {
     use super::*;
     use crate::config::{ExecutableConfig, LaunchConfig, RunnerConfig, WineConfig};
+    use std::collections::BTreeMap;
 
     fn sample_config() -> AppConfig {
         AppConfig {
@@ -325,19 +380,19 @@ mod tests {
 
     #[test]
     fn builds_wrapped_wine_command_with_configured_args() {
-        let config = sample_config();
         let context = RuntimeContext {
-            config_path: PathBuf::from("/games/Child/.workdir/config/config.yaml"),
             game_dir: PathBuf::from("/games/Child"),
             target: PathBuf::from("/games/Child/ChildofLight.exe"),
-            config,
+            config: sample_config(),
         };
 
         let command = build_command(&context, &["--debug".into()]).unwrap();
         assert_eq!(command[0], "gamemoderun");
         assert_eq!(command[1], "mangohud");
         assert_eq!(command[2], "wine");
-        assert_eq!(command.last().unwrap(), "--debug");
-        assert!(command.contains(&"30".into()) == false);
+        assert_eq!(command[3], "/games/Child/ChildofLight.exe");
+        assert_eq!(command[4], "-fullscreen");
+        assert_eq!(command[5], "--language=fr");
+        assert_eq!(command[6], "--debug");
     }
 }
