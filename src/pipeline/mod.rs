@@ -2,4 +2,4 @@ pub mod detect;
 pub mod metadata;
 pub mod setup;
 
-pub use setup::{run, run_with_options, SetupOptions};
+pub use setup::{SetupOptions, run, run_with_options};
