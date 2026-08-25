@@ -22,10 +22,7 @@ pub fn push_array(out: &mut String, name: &str, values: &[String]) -> Result<()>
     Ok(())
 }
 
-pub fn push_env(
-    out: &mut String,
-    env: &std::collections::BTreeMap<String, String>,
-) -> Result<()> {
+pub fn push_env(out: &mut String, env: &std::collections::BTreeMap<String, String>) -> Result<()> {
     for (key, value) in env {
         write!(out, "export {key}={};\n", bash_quote(value)?)
             .expect("writing to String cannot fail");
