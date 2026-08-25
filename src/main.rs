@@ -1,4 +1,5 @@
 use clap::Parser;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -52,6 +53,10 @@ struct Args {
     #[arg(long = "env")]
     env: Vec<String>,
 
+    /// Command wrapper placed before the selected runner; repeatable (for example gamemoderun, mangohud)
+    #[arg(long = "wrapper")]
+    wrappers: Vec<String>,
+
     /// Overwrite existing game.desktop / .directory files
     #[arg(short, long, default_value_t = false)]
     force: bool,
@@ -61,16 +66,17 @@ struct Args {
     verbose: bool,
 }
 
-fn parse_env(entries: Vec<String>) -> kalesa::error::Result<Vec<(String, String)>> {
-    entries
-        .into_iter()
-        .map(|entry| {
-            let (key, value) = entry
-                .split_once('=')
-                .ok_or_else(|| kalesa::error::KalesaError::InvalidEnvironmentKey(entry.clone()))?;
-            Ok((key.to_string(), value.to_string()))
-        })
-        .collect()
+fn parse_env(entries: Vec<String>) -> kalesa::error::Result<BTreeMap<String, String>> {
+    let mut env = BTreeMap::new();
+
+    for entry in entries {
+        let (key, value) = entry
+            .split_once('=')
+            .ok_or_else(|| kalesa::error::KalesaError::InvalidEnvironmentKey(entry.clone()))?;
+        env.insert(key.to_string(), value.to_string());
+    }
+
+    Ok(env)
 }
 
 fn main() -> kalesa::error::Result<()> {
@@ -94,6 +100,7 @@ fn main() -> kalesa::error::Result<()> {
         launch: kalesa::LaunchOptions {
             args: args.args,
             env: parse_env(args.env)?,
+            wrappers: args.wrappers,
         },
         force: args.force,
     };
