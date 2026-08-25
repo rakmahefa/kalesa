@@ -162,8 +162,7 @@ fn find_xdg_icon(target_path: &Path, name: &str) -> Option<PathBuf> {
 
     let icon_exts = ["png", "svg", "xpm"];
     let sizes = [
-        "scalable", "512x512", "256x256", "128x128", "64x64", "48x48", "32x32", "24x24",
-        "16x16",
+        "scalable", "512x512", "256x256", "128x128", "64x64", "48x48", "32x32", "24x24", "16x16",
     ];
 
     for root in &roots {
