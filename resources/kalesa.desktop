@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Kalesa
+Comment=Prepare a game directory for standardized launching
+Exec=kalesa %F
+Icon=applications-games
+Terminal=true
+Categories=Game;Utility;
+MimeType=application/x-ms-dos-executable;application/x-executable;application/vnd.appimage;
+StartupNotify=true
