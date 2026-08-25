@@ -142,7 +142,10 @@ fn config_assignment(config_path: &str) -> String {
     if path.is_absolute() {
         format!("CONFIG_FILE={}", shell_quote(config_path))
     } else {
-        format!("CONFIG_FILE=\"$GAME_DIR/{}\"", shell_double_quote(config_path))
+        format!(
+            "CONFIG_FILE=\"$GAME_DIR/{}\"",
+            shell_double_quote(config_path)
+        )
     }
 }
 
@@ -188,8 +191,8 @@ mod tests {
     #[test]
     fn quotes_relative_config_path() {
         let root = temp_path("kalesa_launcher_config_quote");
-        fs::create_dir_all(&root).unwrap();
-        let path = root.join("launch.sh");
+        fs::create_dir_all(root.join("bin")).unwrap();
+        let path = root.join("bin/launch.sh");
         let config = PathBuf::from(".workdir/config/game 'file.yaml");
 
         write(&path, &config).unwrap();
@@ -203,8 +206,8 @@ mod tests {
     #[test]
     fn quotes_absolute_config_path() {
         let root = temp_path("kalesa_launcher_absolute_quote");
-        fs::create_dir_all(&root).unwrap();
-        let path = root.join("launch.sh");
+        fs::create_dir_all(root.join("bin")).unwrap();
+        let path = root.join("bin/launch.sh");
         let config = root.join("config 'file.yaml");
 
         write(&path, &config).unwrap();
