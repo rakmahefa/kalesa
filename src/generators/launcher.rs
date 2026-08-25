@@ -18,8 +18,10 @@ pub fn write(
 ) -> Result<()> {
     launch.validate()?;
 
-    let content =
-        LAUNCHER_TEMPLATE.replace("__KalesaVersion__", &LAUNCHER_FORMAT_VERSION.to_string());
+    let content = LAUNCHER_TEMPLATE.replace(
+        "__KalesaVersion__",
+        &LAUNCHER_FORMAT_VERSION.to_string(),
+    );
 
     let mut file = File::create(path).map_err(|e| KalesaError::io("creating launch script", e))?;
     file.write_all(content.as_bytes())
@@ -136,7 +138,7 @@ load_config() {
                 return trim(out)
             }
 
-            function scalar(value,    first, last, body, i, c, escaped, next, out) {
+            function scalar(value,    first, last, body, i, c, escaped, next_char, out) {
                 value = trim(value)
                 if (value == "" || value == "null" || value == "~") {
                     return ""
@@ -158,11 +160,11 @@ load_config() {
                     for (i = 1; i <= length(body); i++) {
                         c = substr(body, i, 1)
                         if (escaped) {
-                            next = c
-                            if (next == "n") out = out "\n"
-                            else if (next == "r") out = out "\r"
-                            else if (next == "t") out = out "\t"
-                            else out = out next
+                            next_char = c
+                            if (next_char == "n") out = out "\n"
+                            else if (next_char == "r") out = out "\r"
+                            else if (next_char == "t") out = out "\t"
+                            else out = out next_char
                             escaped = 0
                         } else if (c == "\\") {
                             escaped = 1
@@ -238,9 +240,6 @@ load_config() {
 
                 if (path == "schema_version" ||
                     path == "name" ||
-                    path == "version" ||
-                    path == "developer" ||
-                    path == "description" ||
                     path == "runner.type" ||
                     path == "runner.wine.prefix" ||
                     path == "runner.wine.arch" ||
@@ -330,6 +329,11 @@ export_config_environment() {
     for i in "${!ENV_KEYS[@]}"; do
         export "${ENV_KEYS[$i]}=${ENV_VALUES[$i]}"
     done
+}
+
+require_command() {
+    local command_name="$1"
+    command -v "$command_name" >/dev/null 2>&1 || fail "'$command_name' not found in PATH."
 }
 
 require_wrapper() {
