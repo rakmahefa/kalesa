@@ -219,14 +219,7 @@ fn validate_programs(context: &RuntimeContext) -> Result<()> {
     }
 
     match context.config.runner.runner_type.as_str() {
-        "native" => {
-            if !is_executable(&context.target) {
-                return Err(KalesaError::InvalidRuntimeConfig(format!(
-                    "game executable is not executable: {}",
-                    context.target.display()
-                )));
-            }
-        }
+        "native" => ensure_executable(&context.target)?,
         "wine" => {
             if find_on_path("wine").is_none() {
                 return Err(KalesaError::InvalidRuntimeConfig(
@@ -253,6 +246,30 @@ fn validate_programs(context: &RuntimeContext) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn ensure_executable(path: &Path) -> Result<()> {
+    if is_executable(path) {
+        return Ok(());
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = fs::metadata(path).map_err(|e| KalesaError::io("reading target permissions", e))?;
+        let mut permissions = metadata.permissions();
+        permissions.set_mode(permissions.mode() | 0o111);
+        fs::set_permissions(path, permissions)
+            .map_err(|e| KalesaError::io("making target executable", e))?;
+        if is_executable(path) {
+            return Ok(());
+        }
+    }
+
+    Err(KalesaError::InvalidRuntimeConfig(format!(
+        "game executable is not executable: {}",
+        path.display()
+    )))
 }
 
 fn apply_runner_environment(process: &mut Command, context: &RuntimeContext) {
@@ -394,5 +411,53 @@ mod tests {
         assert_eq!(command[4], "-fullscreen");
         assert_eq!(command[5], "--language=fr");
         assert_eq!(command[6], "--debug");
+    }
+
+    #[test]
+    fn resolves_relative_runtime_paths_against_game_directory() {
+        let game_dir = Path::new("/games/Child of Light");
+        assert_eq!(
+            resolve_path(game_dir, Path::new(".workdir/wine")),
+            PathBuf::from("/games/Child of Light/.workdir/wine")
+        );
+    }
+
+    #[test]
+    fn serde_yaml_preserves_runtime_launch_values() {
+        let yaml = r#"
+            schema_version: 3
+            name: Child of Light
+            version: null
+            developer: null
+            description: null
+            categories: []
+            runner:
+              type: wine
+              wine:
+                prefix: /home/neko/Games/pfx/ChildofLight
+                arch: win64
+              proton: null
+            executable:
+              path: "ChildofLight.exe"
+            launch:
+              args:
+                - "--fullscreen"
+                - "--language=fr"
+              env:
+                DXVK_FRAME_RATE: "30"
+              wrappers:
+                - gamemoderun
+                - mangohud
+        "#;
+
+        let config: AppConfig = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(config.name, "Child of Light");
+        assert_eq!(config.launch.args, vec!["--fullscreen", "--language=fr"]);
+        assert_eq!(config.launch.env.get("DXVK_FRAME_RATE"), Some(&"30".into()));
+        assert_eq!(config.launch.wrappers, vec!["gamemoderun", "mangohud"]);
+        assert_eq!(
+            config.runner.wine.as_ref().unwrap().prefix,
+            PathBuf::from("/home/neko/Games/pfx/ChildofLight")
+        );
     }
 }
