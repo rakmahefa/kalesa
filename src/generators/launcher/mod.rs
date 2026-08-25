@@ -61,10 +61,8 @@ fn validate_inputs(target: &GameTarget, metadata: &GameMetadata, runner: &Runner
         ));
     }
 
-    if runner.is_wine() || runner.is_proton() {
-        if runner.wine_prefix.is_none() {
-            return Err(KalesaError::MissingWinePrefix);
-        }
+    if (runner.is_wine() || runner.is_proton()) && runner.wine_prefix.is_none() {
+        return Err(KalesaError::MissingWinePrefix);
     }
 
     if runner.is_proton() && runner.proton_path.is_none() {
