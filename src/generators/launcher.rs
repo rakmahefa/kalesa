@@ -198,16 +198,14 @@ mod tests {
         write(&path, &config).unwrap();
         let content = fs::read_to_string(&path).unwrap();
 
-        assert!(content.contains(
-            "CONFIG_FILE=\"$GAME_DIR/.workdir/config/game 'file.yaml\""
-        ));
+        assert!(content.contains("CONFIG_FILE=\"$GAME_DIR/.workdir/config/game 'file.yaml\""));
     }
 
     #[test]
     fn quotes_absolute_config_path() {
         let root = temp_path("kalesa_launcher_absolute_quote");
         fs::create_dir_all(root.join("bin")).unwrap();
-        let path = root.join("bin/launch.sh");
+        let path = root.join("launch.sh");
         let config = root.join("config 'file.yaml");
 
         write(&path, &config).unwrap();
