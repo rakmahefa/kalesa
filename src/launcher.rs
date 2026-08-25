@@ -1,8 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::domain::{
-    BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner,
-};
+use crate::domain::{BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner};
 use crate::error::{KalesaError, Result};
 
 pub fn write_launch_script(
