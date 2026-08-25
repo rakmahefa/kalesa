@@ -98,3 +98,71 @@ pub fn write(
         .map_err(|e| KalesaError::io("writing configuration", e))?;
     Ok(())
 }
+
+pub fn write_example(path: &Path) -> Result<()> {
+    let mut file = File::create(path).map_err(|e| KalesaError::io("creating configuration example", e))?;
+    file.write_all(CONFIG_EXAMPLE.as_bytes())
+        .map_err(|e| KalesaError::io("writing configuration example", e))?;
+    Ok(())
+}
+
+const CONFIG_EXAMPLE: &str = r#"# Kalesa configuration schema v3.
+# This file is an editable example only. Copy its structure to config.yaml.
+#
+# Paths may be absolute or relative to the game directory. Relative paths make
+# a generated setup easier to move between directories or machines.
+
+# Schema version understood by Kalesa launcher v3.
+schema_version: 3
+
+# Desktop metadata displayed by launchers and menus.
+name: MyGame
+version: null
+developer: null
+description: null
+categories: []
+
+# Runtime backend.
+# Allowed values: native, wine, proton.
+runner:
+  type: wine
+
+  # Used by Wine and Proton. Prefer a relative path such as
+  # .workdir/wine when the prefix should live beside the game.
+  wine:
+    prefix: /home/user/Games/pfx/MyGame
+    arch: win64
+
+  # Required only when runner.type is proton.
+  proton: null
+  # Example:
+  # proton:
+  #   path: /home/user/.steam/steam/compatibilitytools.d/Proton/Proton
+
+# Executable to run.
+# Prefer a path relative to the game directory for portability.
+executable:
+  path: MyGame.exe
+
+launch:
+  # Arguments are passed as separate argv entries, in this exact order.
+  args: []
+  # Example:
+  # args:
+  #   - -fullscreen
+  #   - --language=fr
+
+  # Environment variables exported before the runner starts.
+  env: {}
+  # Example:
+  # env:
+  #   WINEDEBUG: -all
+  #   DXVK_LOG_LEVEL: none
+
+  # Optional wrappers executed from left to right before the runner.
+  wrappers: []
+  # Example:
+  # wrappers:
+  #   - gamemoderun
+  #   - mangohud
+"#;
