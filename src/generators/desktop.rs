@@ -202,7 +202,10 @@ mod tests {
         let expected = format!("Icon={}/.workdir/icons/game_icon.png", dir.display());
 
         assert!(desktop.contains(&expected), "desktop content: {desktop}");
-        assert!(directory.contains(&expected), "directory content: {directory}");
+        assert!(
+            directory.contains(&expected),
+            "directory content: {directory}"
+        );
 
         let _ = fs::remove_dir_all(&dir);
     }
