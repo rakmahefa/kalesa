@@ -18,10 +18,8 @@ pub fn write(
 ) -> Result<()> {
     launch.validate()?;
 
-    let content = LAUNCHER_TEMPLATE.replace(
-        "__KalesaVersion__",
-        &LAUNCHER_FORMAT_VERSION.to_string(),
-    );
+    let content =
+        LAUNCHER_TEMPLATE.replace("__KalesaVersion__", &LAUNCHER_FORMAT_VERSION.to_string());
 
     let mut file = File::create(path).map_err(|e| KalesaError::io("creating launch script", e))?;
     file.write_all(content.as_bytes())
@@ -240,6 +238,9 @@ load_config() {
 
                 if (path == "schema_version" ||
                     path == "name" ||
+                    path == "version" ||
+                    path == "developer" ||
+                    path == "description" ||
                     path == "runner.type" ||
                     path == "runner.wine.prefix" ||
                     path == "runner.wine.arch" ||
@@ -331,11 +332,6 @@ export_config_environment() {
     done
 }
 
-require_command() {
-    local command_name="$1"
-    command -v "$command_name" >/dev/null 2>&1 || fail "'$command_name' not found in PATH."
-}
-
 require_wrapper() {
     local wrapper="$1"
     if [[ "$wrapper" == */* ]]; then
@@ -410,8 +406,8 @@ exec "${COMMAND[@]}"
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::GameMetadata;
     use crate::domain::{BinaryType, GameTarget, LaunchOptions, RunnerBackend};
+    use crate::GameMetadata;
     use std::fs;
     use std::path::PathBuf;
 
