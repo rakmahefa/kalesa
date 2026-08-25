@@ -38,8 +38,9 @@ pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()>
 
     let canonical_target =
         fs::canonicalize(target_path).map_err(|e| KalesaError::io("canonicalizing target", e))?;
-    let current_dir =
-        std::env::current_dir().map_err(|e| KalesaError::io("reading current directory", e))?;
+    let target_dir = canonical_target.parent().ok_or_else(|| {
+        KalesaError::InvalidDesktopValue("target has no parent directory".into())
+    })?;
 
     let binary_type = detect::detect(&canonical_target)?;
     let target = GameTarget::new(canonical_target.clone(), binary_type);
@@ -47,7 +48,7 @@ pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()>
     apply_overrides(&mut game_metadata, &options);
     let runner = Runner::for_target_with_backend(
         &target,
-        &current_dir,
+        target_dir,
         options.runner,
         options.wine_prefix.clone(),
         options.proton_path.clone(),
@@ -57,7 +58,7 @@ pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()>
     info!("Detected target binary type: {}", binary_type.as_str());
     info!("Selected runner backend: {}", runner.kind.as_str());
 
-    let workdir = WorkDir::new();
+    let workdir = WorkDir::new(target_dir);
     workdir.create()?;
 
     let icon_path = materialize_icon(&target, &game_metadata, options.icon.is_some(), &workdir)?;
@@ -75,7 +76,7 @@ pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()>
     let launch_path = workdir.bin.join("launch.sh");
     launcher::write(&launch_path, &config_path)?;
 
-    desktop::write_with_metadata(&game_metadata, &current_dir, &current_dir, options.force)?;
+    desktop::write_with_metadata(&game_metadata, target_dir, target_dir, options.force)?;
 
     info!("Setup completed successfully for {}", game_metadata.name);
     Ok(())
@@ -177,8 +178,8 @@ struct WorkDir {
 }
 
 impl WorkDir {
-    fn new() -> Self {
-        let root = PathBuf::from(".workdir");
+    fn new(base_dir: &Path) -> Self {
+        let root = base_dir.join(".workdir");
         Self {
             config: root.join("config"),
             bin: root.join("bin"),
@@ -192,5 +193,33 @@ impl WorkDir {
             fs::create_dir_all(dir).map_err(|e| KalesaError::io("creating workdir", e))?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn workdir_is_created_beside_target() {
+        let target_dir = Path::new("/games/ChildofLight");
+        let workdir = WorkDir::new(target_dir);
+
+        assert_eq!(
+            workdir.root,
+            PathBuf::from("/games/ChildofLight/.workdir")
+        );
+        assert_eq!(
+            workdir.config,
+            PathBuf::from("/games/ChildofLight/.workdir/config")
+        );
+        assert_eq!(
+            workdir.bin,
+            PathBuf::from("/games/ChildofLight/.workdir/bin")
+        );
+        assert_eq!(
+            workdir.icons,
+            PathBuf::from("/games/ChildofLight/.workdir/icons")
+        );
     }
 }
