@@ -2,7 +2,7 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
-use crate::domain::{LaunchOptions, Runner, RunnerKind};
+use crate::domain::{LaunchOptions, Runner};
 use crate::error::{KalesaError, Result};
 use crate::{GameMetadata, GameTarget};
 
