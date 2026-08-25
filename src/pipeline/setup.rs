@@ -74,7 +74,14 @@ pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()>
     )?;
 
     let launch_path = workdir.bin.join("launch.sh");
-    launcher::write(&launch_path, &config_path)?;
+    launcher::write(
+        &launch_path,
+        &config_path,
+        &target,
+        &game_metadata,
+        &runner,
+        &options.launch,
+    )?;
 
     desktop::write_with_metadata(&game_metadata, target_dir, target_dir, options.force)?;
 

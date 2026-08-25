@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use super::BinaryType;
@@ -37,12 +38,13 @@ impl GameMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct LaunchOptions {
     pub args: Vec<String>,
-    pub env: Vec<(String, String)>,
+    pub env: BTreeMap<String, String>,
+    pub wrappers: Vec<String>,
 }
 
 impl LaunchOptions {
     pub fn validate(&self) -> crate::error::Result<()> {
-        for (key, _) in &self.env {
+        for key in self.env.keys() {
             if key.is_empty()
                 || !key.chars().enumerate().all(|(i, c)| {
                     (i == 0 && (c == '_' || c.is_ascii_alphabetic()))
@@ -54,6 +56,17 @@ impl LaunchOptions {
                 ));
             }
         }
+
+        if self
+            .wrappers
+            .iter()
+            .any(|wrapper| wrapper.trim().is_empty())
+        {
+            return Err(crate::error::KalesaError::InvalidDesktopValue(
+                "launch wrapper cannot be empty".into(),
+            ));
+        }
+
         Ok(())
     }
 }
