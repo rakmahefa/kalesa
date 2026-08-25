@@ -49,7 +49,9 @@ impl LaunchOptions {
                         || (i > 0 && (c == '_' || c.is_ascii_alphanumeric()))
                 })
             {
-                return Err(crate::error::KalesaError::InvalidEnvironmentKey(key.clone()));
+                return Err(crate::error::KalesaError::InvalidEnvironmentKey(
+                    key.clone(),
+                ));
             }
         }
         Ok(())
