@@ -136,7 +136,7 @@ load_config() {
                 return trim(out)
             }
 
-            function scalar(value,    first, last, body, i, c, escaped, next, out) {
+            function scalar(value,    first, last, body, i, c, escaped, next_char, out) {
                 value = trim(value)
                 if (value == "" || value == "null" || value == "~") {
                     return ""
@@ -158,11 +158,11 @@ load_config() {
                     for (i = 1; i <= length(body); i++) {
                         c = substr(body, i, 1)
                         if (escaped) {
-                            next = c
-                            if (next == "n") out = out "\n"
-                            else if (next == "r") out = out "\r"
-                            else if (next == "t") out = out "\t"
-                            else out = out next
+                            next_char = c
+                            if (next_char == "n") out = out "\n"
+                            else if (next_char == "r") out = out "\r"
+                            else if (next_char == "t") out = out "\t"
+                            else out = out next_char
                             escaped = 0
                         } else if (c == "\\") {
                             escaped = 1
