@@ -1,5 +1,5 @@
 use serde::Serialize;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -75,8 +75,8 @@ mod tests {
             label,
             std::process::id()
         ));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
         dir
     }
 
@@ -89,7 +89,7 @@ mod tests {
         let runner = Runner::for_target(&target, &dir);
 
         write(&path, &target, "My Game", &runner, &dir).unwrap();
-        let content = fs::read_to_string(&path).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
 
         assert!(content.contains("schema_version: 1"));
         assert!(content.contains("name: My Game"));
@@ -97,7 +97,7 @@ mod tests {
         assert!(content.contains("wine:"));
         assert!(content.contains("My Game [1998].exe"));
 
-        let _ = fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -108,13 +108,13 @@ mod tests {
         let runner = Runner::for_target(&target, &dir);
 
         write(&path, &target, "My Game", &runner, &dir).unwrap();
-        let content = fs::read_to_string(&path).unwrap();
+        let content = std::fs::read_to_string(&path).unwrap();
 
         assert!(content.contains("schema_version: 1"));
         assert!(content.contains("type: linux"));
         assert!(!content.contains("prefix:"));
         assert!(!content.contains("arch:"));
 
-        let _ = fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
