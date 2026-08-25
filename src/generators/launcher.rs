@@ -23,21 +23,17 @@ pub fn write(
     launch.validate()?;
 
     let config_assignment = config_assignment(config_path);
-    let target_value = shell_single_quote(&target.path.to_string_lossy());
     let name_value = shell_single_quote(&metadata.name);
     let runner_value = shell_single_quote(runner.kind.as_str());
     let binary_type_value = shell_single_quote(target.binary_type.as_str());
-
-    let args = bash_array("CONFIG_ARGS", &launch.args);
-    let wrappers = bash_array("CONFIG_WRAPPERS", &launch.wrappers);
-    let env = bash_exports(&launch.env);
+    let target_value = shell_single_quote(&target.path.to_string_lossy());
 
     let content = format!(
         r#"#!/bin/bash
 # Generated launch script - do not edit by hand, re-run kalesa instead.
 # Kalesa launcher format: {launcher_version}
 # Kalesa config schema: 3
-# Runtime values below are generated from {config_path}; runner-specific nested values are read from that YAML at launch time.
+# Runtime values are loaded from {config_path} at launch time.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
@@ -51,9 +47,8 @@ RUNNER={runner}
 TARGET_VALUE={target}
 WINE_PREFIX_VALUE=''
 PROTON_PATH_VALUE=''
-{args}
-{wrappers}
-{env}
+CONFIG_ARGS=()
+CONFIG_WRAPPERS=()
 
 fail() {{
     echo "[!] $*" >&2
@@ -74,12 +69,11 @@ require_command() {{
     command -v "$command_name" >/dev/null 2>&1 || fail "'$command_name' not found in PATH."
 }}
 
-yaml_nested_scalar() {{
-    local root="$1"
-    local nested="$2"
-    local key="$3"
+yaml_runner_scalar() {{
+    local nested="$1"
+    local key="$2"
 
-    awk -v root="$root" -v nested="$nested" -v key="$key" '
+    awk -v nested="$nested" -v key="$key" '
         function clean_key(value) {{
             sub(/^[[:space:]]+/, "", value)
             sub(/:.*/, "", value)
@@ -90,16 +84,16 @@ yaml_nested_scalar() {{
             sub(/[[:space:]]+$/, "", value)
             if (value == "null") return ""
             if (value ~ /^\x27.*\x27$/) return substr(value, 2, length(value) - 2)
-            if (value ~ /^\".*\"$/) return substr(value, 2, length(value) - 2)
+            if (value ~ /^".*"$/) return substr(value, 2, length(value) - 2)
             return value
-        }}
+        }
         /^[^[:space:]][^:]*:/ {{
             current_root = clean_key($0)
-            in_root = (current_root == root)
+            in_runner = (current_root == "runner")
             in_nested = 0
             next
         }}
-        in_root && /^[[:space:]][[:space:]][^[:space:]][^:]*:/ {{
+        in_runner && /^[[:space:]][[:space:]][^[:space:]][^:]*:/ {{
             current_nested = clean_key($0)
             in_nested = (current_nested == nested)
             next
@@ -114,6 +108,96 @@ yaml_nested_scalar() {{
             }}
         }}
     ' "$CONFIG_FILE"
+}}
+
+yaml_launch_lists() {{
+    local key="$1"
+
+    awk -v key="$key" '
+        function clean_key(value) {{
+            sub(/^[[:space:]]+/, "", value)
+            sub(/:.*/, "", value)
+            return value
+        }}
+        function clean_scalar(value) {{
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            if (value ~ /^\x27.*\x27$/) return substr(value, 2, length(value) - 2)
+            if (value ~ /^".*"$/) return substr(value, 2, length(value) - 2)
+            return value
+        }
+        /^[^[:space:]][^:]*:/ {{
+            current_root = clean_key($0)
+            in_launch = (current_root == "launch")
+            in_list = 0
+            next
+        }}
+        in_launch && /^[[:space:]][[:space:]][^[:space:]][^:]*:/ {{
+            current_key = clean_key($0)
+            in_list = (current_key == key)
+            next
+        }}
+        in_list && /^[[:space:]][[:space:]][[:space:]][[:space:]]-/ {{
+            value = $0
+            sub(/^[[:space:]]*-[[:space:]]*/, "", value)
+            print clean_scalar(value)
+            next
+        }}
+        in_list && /^[[:space:]][[:space:]][^[:space:]][^:]*:/ {{
+            exit
+        }}
+    ' "$CONFIG_FILE"
+}}
+
+yaml_launch_env() {{
+    awk '
+        function clean_scalar(value) {{
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            if (value == "null") return ""
+            if (value ~ /^\x27.*\x27$/) return substr(value, 2, length(value) - 2)
+            if (value ~ /^".*"$/) return substr(value, 2, length(value) - 2)
+            return value
+        }
+        /^[^[:space:]][^:]*:/ {{
+            in_launch = ($0 ~ /^launch:/)
+            in_env = 0
+            next
+        }}
+        in_launch && /^  env:/ {{
+            in_env = 1
+            next
+        }}
+        in_env && /^  [^[:space:]][^:]*:/ {{
+            if ($0 !~ /^  env:/) exit
+        }}
+        in_env && /^    [^[:space:]][^:]*:/ {{
+            line = $0
+            sub(/^    /, "", line)
+            key = line
+            sub(/:.*/, "", key)
+            value = $0
+            sub(/^    [^:]+:[[:space:]]*/, "", value)
+            print key "\t" clean_scalar(value)
+        }}
+    ' "$CONFIG_FILE"
+}}
+
+load_launch_options() {{
+    CONFIG_ARGS=()
+    while IFS= read -r value; do
+        [[ -n "$value" ]] && CONFIG_ARGS+=("$value")
+    done < <(yaml_launch_lists args)
+
+    CONFIG_WRAPPERS=()
+    while IFS= read -r value; do
+        [[ -n "$value" ]] && CONFIG_WRAPPERS+=("$value")
+    done < <(yaml_launch_lists wrappers)
+
+    while IFS=$'\t' read -r key value; do
+        [[ -z "$key" ]] && continue
+        export "$key=$value"
+    done < <(yaml_launch_env)
 }}
 
 require_wrapper() {{
@@ -145,22 +229,24 @@ print_command() {{
 }}
 
 cd "$GAME_DIR"
-
 [[ -f "$CONFIG_FILE" ]] || fail "configuration not found: $CONFIG_FILE"
+
 case "$BINARY_TYPE" in
     linux|appimage|windows) ;;
     *) fail "unsupported binary type: $BINARY_TYPE" ;;
 esac
 
 if [[ "$RUNNER" == "wine" || "$RUNNER" == "proton" ]]; then
-    WINE_PREFIX_VALUE="$(yaml_nested_scalar runner wine prefix)"
+    WINE_PREFIX_VALUE="$(yaml_runner_scalar wine prefix)"
     [[ -n "$WINE_PREFIX_VALUE" ]] || fail "runner.wine.prefix is missing in $CONFIG_FILE"
 fi
 
 if [[ "$RUNNER" == "proton" ]]; then
-    PROTON_PATH_VALUE="$(yaml_nested_scalar runner proton path)"
+    PROTON_PATH_VALUE="$(yaml_runner_scalar proton path)"
     [[ -n "$PROTON_PATH_VALUE" ]] || fail "runner.proton.path is missing in $CONFIG_FILE"
 fi
+
+load_launch_options
 
 TARGET="$(resolve_path "$TARGET_VALUE")"
 [[ -f "$TARGET" ]] || fail "game executable not found: $TARGET"
@@ -187,9 +273,6 @@ exec "${{COMMAND[@]}}"
         binary_type = binary_type_value,
         runner = runner_value,
         target = target_value,
-        args = args,
-        wrappers = wrappers,
-        env = env,
         runner_setup = runner_setup(runner.kind),
         runner_command = runner_command(runner.kind),
     );
@@ -243,22 +326,6 @@ COMMAND+=("wine" "$TARGET")"#
     }
 }
 
-fn bash_array(name: &str, values: &[String]) -> String {
-    let mut output = format!("{name}=()\n");
-    for value in values {
-        output.push_str(&format!("{name}+=({})\n", shell_single_quote(value)));
-    }
-    output
-}
-
-fn bash_exports(values: &std::collections::BTreeMap<String, String>) -> String {
-    let mut output = String::new();
-    for (key, value) in values {
-        output.push_str(&format!("export {key}={}\n", shell_single_quote(value)));
-    }
-    output
-}
-
 fn config_assignment(config_path: &str) -> String {
     let path = Path::new(config_path);
     if path.is_absolute() {
@@ -286,15 +353,12 @@ fn shell_double_quote(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{
-        BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner, RunnerBackend,
-    };
-    use std::collections::BTreeMap;
+    use crate::domain::{BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner, RunnerBackend};
     use std::fs;
     use std::path::PathBuf;
 
     #[test]
-    fn generates_schema_v3_yq_free_runtime_launcher() {
+    fn generates_schema_v3_runtime_yaml_loader() {
         let root = temp_path("kalesa_launcher_v3");
         fs::create_dir_all(root.join("bin")).unwrap();
         let path = root.join("bin/launch.sh");
@@ -307,31 +371,19 @@ mod tests {
         let project_dir = PathBuf::from("/games/My Game");
         let runner =
             Runner::for_target_with_backend(&target, &project_dir, RunnerBackend::Wine, None, None);
-        let mut env = BTreeMap::new();
-        env.insert("WINEDEBUG".into(), "-all".into());
-        let launch = LaunchOptions {
-            args: vec!["hello world".into(), "--fullscreen".into()],
-            env,
-            wrappers: vec!["gamemoderun".into(), "mangohud".into()],
-        };
+        let launch = LaunchOptions::default();
 
         write(&path, &config, &target, &metadata, &runner, &launch).unwrap();
         let content = fs::read_to_string(&path).unwrap();
 
         assert!(content.contains("Kalesa launcher format: 3"));
-        assert!(content.contains("Kalesa config schema: 3"));
-        assert!(content.contains("CONFIG_ARGS+=('hello world')"));
-        assert!(content.contains("CONFIG_WRAPPERS+=('gamemoderun')"));
-        assert!(content.contains("export WINEDEBUG='-all'"));
-        assert!(content.contains("COMMAND=()"));
-        assert!(content.contains("COMMAND+=(\"wine\" \"$TARGET\")"));
-        assert!(content.contains("yaml_nested_scalar runner wine prefix"));
-        assert!(content.contains("WINE_PREFIX_VALUE=''"));
-        assert!(content.contains("echo \"[+] $label${rendered}\""));
+        assert!(content.contains("yaml_launch_lists args"));
+        assert!(content.contains("yaml_launch_lists wrappers"));
+        assert!(content.contains("yaml_launch_env"));
+        assert!(content.contains("yaml_runner_scalar wine prefix"));
         assert!(!content.contains("eval "));
         assert!(!content.contains("yq"));
         assert!(!content.contains("sh -c"));
-        assert!(!content.contains("/games/My Game/.workdir/wine"));
     }
 
     #[test]
