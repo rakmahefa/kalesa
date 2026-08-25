@@ -2,7 +2,7 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
-use crate::domain::{LaunchOptions, Runner};
+use crate::domain::{LaunchOptions, Runner, RunnerKind};
 use crate::error::{KalesaError, Result};
 use crate::{GameMetadata, GameTarget};
 
@@ -18,10 +18,8 @@ pub fn write(
 ) -> Result<()> {
     launch.validate()?;
 
-    let content = LAUNCHER_TEMPLATE.replace(
-        "__KalesaVersion__",
-        &LAUNCHER_FORMAT_VERSION.to_string(),
-    );
+    let content =
+        LAUNCHER_TEMPLATE.replace("__KalesaVersion__", &LAUNCHER_FORMAT_VERSION.to_string());
 
     let mut file = File::create(path).map_err(|e| KalesaError::io("creating launch script", e))?;
     file.write_all(content.as_bytes())
@@ -419,13 +417,7 @@ mod tests {
         fs::create_dir_all(root.join(".workdir/bin")).unwrap();
         let launcher = root.join(".workdir/bin/launch.sh");
         let target = GameTarget::new(PathBuf::from("/ignored/game.exe"), BinaryType::WindowsPe);
-        let runner = Runner::for_target_with_backend(
-            &target,
-            &root,
-            RunnerBackend::Wine,
-            None,
-            None,
-        );
+        let runner = Runner::for_target_with_backend(&target, &root, RunnerBackend::Wine, None, None);
 
         write(
             &launcher,
