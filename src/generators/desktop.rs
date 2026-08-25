@@ -11,7 +11,9 @@ fn desktop_exec_quote(path: &Path) -> Result<String> {
         .to_str()
         .ok_or_else(|| KalesaError::InvalidDesktopValue("path is not valid UTF-8".into()))?;
     if value.chars().any(|ch| matches!(ch, '\n' | '\r')) {
-        return Err(KalesaError::InvalidDesktopValue("Exec path cannot contain a newline".into()));
+        return Err(KalesaError::InvalidDesktopValue(
+            "Exec path cannot contain a newline".into(),
+        ));
     }
     let mut escaped = String::with_capacity(value.len() + 8);
     for ch in value.chars() {
@@ -28,7 +30,9 @@ fn desktop_exec_quote(path: &Path) -> Result<String> {
 
 fn desktop_value_escape(value: &str) -> Result<String> {
     if value.chars().any(|ch| matches!(ch, '\n' | '\r')) {
-        return Err(KalesaError::InvalidDesktopValue("Desktop Entry value cannot contain a newline".into()));
+        return Err(KalesaError::InvalidDesktopValue(
+            "Desktop Entry value cannot contain a newline".into(),
+        ));
     }
     Ok(value.replace('\\', "\\\\"))
 }
@@ -67,17 +71,17 @@ pub fn write_with_metadata(
     let version = metadata
         .version
         .as_deref()
-        .map(|v| desktop_value_escape(v))
+        .map(desktop_value_escape)
         .transpose()?;
     let developer = metadata
         .developer
         .as_deref()
-        .map(|v| desktop_value_escape(v))
+        .map(desktop_value_escape)
         .transpose()?;
     let comment = metadata
         .description
         .as_deref()
-        .map(|v| desktop_value_escape(v))
+        .map(desktop_value_escape)
         .transpose()?;
     let categories = if metadata.categories.is_empty() {
         "Game;".to_string()
@@ -108,18 +112,24 @@ pub fn write_with_metadata(
 
     write_if_allowed(&output_dir.join("game.desktop"), &desktop_content, force)?;
 
-    let directory_content = format!("[Desktop Entry]\nType=Directory\nName={name}\nIcon={icon}\n");
+    let directory_content =
+        format!("[Desktop Entry]\nType=Directory\nName={name}\nIcon={icon}\n");
     write_if_allowed(&output_dir.join(".directory"), &directory_content, force)?;
     Ok(())
 }
 
 fn write_if_allowed(path: &Path, content: &str, force: bool) -> Result<()> {
     if path.exists() && !force {
-        warn!("{:?} already exists, skipping (pass --force to overwrite)", path);
+        warn!(
+            "{:?} already exists, skipping (pass --force to overwrite)",
+            path
+        );
         return Ok(());
     }
-    let mut file = File::create(path).map_err(|e| KalesaError::io("creating desktop entry", e))?;
-    file.write_all(content.as_bytes()).map_err(|e| KalesaError::io("writing desktop entry", e))?;
+    let mut file =
+        File::create(path).map_err(|e| KalesaError::io("creating desktop entry", e))?;
+    file.write_all(content.as_bytes())
+        .map_err(|e| KalesaError::io("writing desktop entry", e))?;
     info!("Generated {:?}", path);
     Ok(())
 }
