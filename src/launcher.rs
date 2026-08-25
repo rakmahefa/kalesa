@@ -201,7 +201,7 @@ mod tests {
         let content = fs::read_to_string(dir.join("game.desktop")).unwrap();
         assert!(content.contains("Name=My Game's Edition"));
         assert!(content.contains("Exec=\""));
-        assert!(content.contains("Icon=/tmp" ) || content.contains("Icon="));
+        assert!(content.contains("Icon=/tmp") || content.contains("Icon="));
         assert!(content.contains("My Game's icon.png"));
 
         let _ = fs::remove_dir_all(&dir);
@@ -211,10 +211,7 @@ mod tests {
     fn desktop_entries_reject_newlines() {
         let dir = temp_dir("desktop_newline");
         let result = write_desktop_entries("bad\nname", &dir, None, &dir, true);
-        assert!(matches!(
-            result,
-            Err(KalesaError::InvalidDesktopValue(_))
-        ));
+        assert!(matches!(result, Err(KalesaError::InvalidDesktopValue(_))));
         let _ = fs::remove_dir_all(&dir);
     }
 
