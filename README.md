@@ -5,10 +5,11 @@ Outil en ligne de commande qui prépare un dossier de jeu pour un lancement stan
 ## Prérequis
 
 - **Rust >= 1.85** (le projet utilise `edition = "2024"`). Le fichier `rust-toolchain.toml` fixe ce numéro.
+- **`yq`** dans le `PATH` : le `launch.sh` relit `config.yaml` à chaque lancement.
 - **`wine`** dans le `PATH` lorsque le runner Wine est utilisé.
 - Un exécutable Proton peut être fourni avec `--proton-path` lorsque le runner Proton est utilisé.
 
-Le `launch.sh` généré n’a plus de dépendance à `yq` : les valeurs du runtime sont matérialisées directement depuis le même modèle Rust que le YAML au moment de la génération.
+Le `launch.sh` généré reste stable après la création du package. Les modifications de comportement se font dans `.workdir/config/config.yaml`, qui constitue la source de vérité du runtime.
 
 ## Usage
 
@@ -85,7 +86,7 @@ runner:
     arch: win64
   proton: null
 executable:
-  path: /path/to/ChildofLight.exe
+  path: /path/to/ChildOfLight.exe
 launch:
   args:
     - -fullscreen
@@ -104,28 +105,50 @@ Le schéma v3 conserve `args` comme une liste YAML native et transforme `env` en
 
 Kalesa a évolué d’un ancien schéma v1 vers v2 puis v3. Une configuration existante n’est pas réécrite automatiquement : relancer Kalesa sur la cible reste le chemin recommandé pour régénérer les artefacts selon le format actuel.
 
-## Launcher runtime v3
+## Launcher runtime
 
-Le `launch.sh` généré est un runtime Bash strict. Il ne parse pas le YAML au lancement et ne dépend donc pas de `yq`. Les valeurs sont générées depuis le même modèle Rust que `config.yaml` afin d’éviter une divergence de parsing entre générateur et runtime.
+Le launcher actuel est au **format 4** et la configuration reste au **schema v3**.
 
-Le launcher v3 :
+Kalesa génère le `launch.sh` une seule fois avec le package. Au runtime, `launch.sh` **recharge `config.yaml` avec `yq` à chaque exécution**. Modifier le YAML modifie donc effectivement le comportement du prochain lancement sans régénérer le `.workdir`.
 
-- vérifie la présence du fichier de configuration et utilise explicitement le schema v3 ;
-- résout les chemins absolus et relatifs au dossier du jeu ;
+Le launcher runtime :
+
+- vérifie la présence de `.workdir/config/config.yaml` ;
+- vérifie que `yq` est disponible ;
+- valide `schema_version: 3` avant lecture ;
+- lit `name`, `executable.path`, `runner`, Wine/Proton, `launch.args`, `launch.env` et `launch.wrappers` depuis le YAML courant ;
+- résout les chemins relatifs par rapport au dossier du jeu ;
 - représente les arguments et wrappers comme des tableaux Bash ;
-- applique les variables d’environnement sous forme de valeurs shell-quotées ;
+- valide les noms de variables d’environnement avant export ;
 - vérifie les dépendances du runner et des wrappers ;
 - construit la commande complète sans `eval` et sans `sh -c` ;
-- affiche la commande finale avec `echo` avant l’exécution ;
+- affiche la commande finale avec `printf %q` ;
 - conserve les arguments ajoutés directement à `launch.sh` après ceux de la configuration ;
 - utilise `exec` afin de préserver le code de retour du jeu.
 
-Le format du launcher est identifié dans le script généré par :
+Le générateur est organisé en modules spécialisés : rendu, template shell et génération du fichier launcher. Le parsing YAML reste une responsabilité du runtime via `yq`, tandis que la validation du package et la production initiale du schema restent des responsabilités Rust.
+
+Le format du launcher et le schéma de configuration sont identifiés dans le script généré par :
 
 ```bash
-# Kalesa launcher format: 3
+# Kalesa launcher format: 4
 # Kalesa config schema: 3
 ```
+
+### Contrat `config.yaml` / `launch.sh`
+
+```text
+kalesa <game>
+      │
+      ├── .workdir/config/config.yaml  ← source de vérité mutable
+      └── .workdir/bin/launch.sh       ← runtime stable
+                                             │
+                                             └── yq → config.yaml
+                                                     │
+                                                     └── jeu
+```
+
+Le `workdir`, le YAML et le launcher ne sont pas régénérés à chaque lancement. Ils sont produits lors de la préparation du jeu ; ensuite, `config.yaml` peut être édité à la volée.
 
 ## Génération
 
@@ -150,7 +173,8 @@ game.desktop
 ## Sécurité des launchers
 
 - le YAML est validé par Kalesa avant génération ;
-- les arguments et variables d’environnement sont shell-quotés lors de la génération du runtime ;
+- le YAML est relu avec un parseur YAML dédié au runtime, sans parsing ad hoc en Bash ;
+- les arguments sont conservés comme des éléments Bash distincts ;
 - les variables d’environnement utilisent uniquement des noms valides ;
 - les chemins relatifs sont résolus par rapport au dossier du jeu ;
 - les entrées `.desktop` rejettent les retours à la ligne ;
@@ -160,17 +184,19 @@ game.desktop
 ## Tests
 
 ```bash
-cargo fmt --all -- --check
+cargo fmt
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo build --workspace --release
 ```
 
-La CI GitHub exécute ces quatre contrôles.
+La CI GitHub exécute ces contrôles.
+
+Le générateur de launcher vérifie également que le runtime charge réellement les valeurs depuis `config.yaml` et non depuis les valeurs Rust utilisées lors de la génération.
 
 ## Limites connues / pistes futures
 
-- Le launcher v3 embarque les valeurs issues du YAML au moment de la génération ; modifier manuellement `config.yaml` sans régénérer `launch.sh` ne modifie donc pas le runtime embarqué.
+- `yq` est actuellement une dépendance runtime du launcher et doit être disponible dans le `PATH` de la machine de jeu.
 - L’extraction de ressources internes d’une AppImage n’est pas exécutée automatiquement : Kalesa privilégie les métadonnées `.desktop`, les icônes XDG et les icônes voisines afin de ne pas exécuter/monter une image potentiellement non fiable.
 - Les tests d’intégration du pipeline complet et les fixtures PE/ELF réels restent à renforcer.
 - La migration automatique de configurations v1/v2 vers v3 n’est pas encore fournie ; la régénération avec Kalesa reste le chemin recommandé.
