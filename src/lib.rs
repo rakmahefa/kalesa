@@ -112,8 +112,8 @@ pub fn run_setup(target_path: &Path, custom_name: Option<String>, force: bool) -
             .to_string()
     });
 
-    let current_dir = std::env::current_dir()
-        .map_err(|e| KalesaError::io("reading current directory", e))?;
+    let current_dir =
+        std::env::current_dir().map_err(|e| KalesaError::io("reading current directory", e))?;
     let binary_type = detect_binary_type(&target_path)?;
     info!("Detected target binary type: {}", binary_type.as_str());
 
@@ -130,13 +130,16 @@ pub fn run_setup(target_path: &Path, custom_name: Option<String>, force: bool) -
 
     if binary_type.is_windows() {
         let icon_target_path = icons_dir.join("game_icon.png");
-        let contents = fs::read(&target_path)
-            .map_err(|e| KalesaError::io("reading PE icon resources", e))?;
+        let contents =
+            fs::read(&target_path).map_err(|e| KalesaError::io("reading PE icon resources", e))?;
         if icon::extract_pe_icon(&contents, &icon_target_path) {
             info!("Extracted icon from PE resources to {:?}", icon_target_path);
             icon_path = Some(icon_target_path);
         } else {
-            warn!("Could not extract an icon from the PE resources of {:?}", target_path);
+            warn!(
+                "Could not extract an icon from the PE resources of {:?}",
+                target_path
+            );
         }
     } else if let Some(found) = icon::find_linux_icon(&target_path) {
         let ext = found.extension().and_then(|e| e.to_str()).unwrap_or("png");
@@ -152,7 +155,13 @@ pub fn run_setup(target_path: &Path, custom_name: Option<String>, force: bool) -
     }
 
     let config_file_path = config_dir.join("config.yaml");
-    config::write_config(&config_file_path, &game_name, &target_path, binary_type, &current_dir)?;
+    config::write_config(
+        &config_file_path,
+        &game_name,
+        &target_path,
+        binary_type,
+        &current_dir,
+    )?;
     info!("Generated {:?}", config_file_path);
 
     let launch_sh_path = bin_dir.join("launch.sh");
@@ -175,7 +184,10 @@ pub fn run_setup(target_path: &Path, custom_name: Option<String>, force: bool) -
         force,
     )?;
 
-    info!("Architecture setup completed successfully for {}", game_name);
+    info!(
+        "Architecture setup completed successfully for {}",
+        game_name
+    );
     Ok(())
 }
 
