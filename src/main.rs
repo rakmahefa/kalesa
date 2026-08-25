@@ -21,7 +21,7 @@ struct Args {
     verbose: bool,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> kalesa::error::Result<()> {
     let args = Args::parse();
 
     let default_level = if args.verbose { "debug" } else { "info" };
