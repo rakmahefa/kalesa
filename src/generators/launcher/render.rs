@@ -30,17 +30,21 @@ pub fn render(
     writeln!(
         prefix,
         "TARGET_VALUE={}",
-        bash_quote(&path_text(&target.path)?)
+        bash_quote(&path_text(&target.path)?)?
     )
     .expect("writing to String cannot fail");
-    writeln!(prefix, "RUNNER={}", bash_quote(runner.kind.as_str()))
-        .expect("writing to String cannot fail");
+    writeln!(
+        prefix,
+        "RUNNER={}",
+        bash_quote(runner.kind.as_str())?
+    )
+    .expect("writing to String cannot fail");
 
     if let Some(prefix_path) = &runner.wine_prefix {
         writeln!(
             prefix,
             "WINE_PREFIX_VALUE={}",
-            bash_quote(&path_text(prefix_path)?)
+            bash_quote(&path_text(prefix_path)?)?
         )
         .expect("writing to String cannot fail");
     } else {
@@ -57,7 +61,7 @@ pub fn render(
         writeln!(
             prefix,
             "PROTON_PATH_VALUE={}",
-            bash_quote(&path_text(proton_path)?)
+            bash_quote(&path_text(proton_path)?)?
         )
         .expect("writing to String cannot fail");
     } else {
