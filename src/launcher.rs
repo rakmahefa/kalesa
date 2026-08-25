@@ -1,7 +1,7 @@
 use log::{info, warn};
 use std::fs::{self, File};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::error::{KalesaError, Result};
 use crate::BinaryType;
@@ -138,6 +138,7 @@ fn write_if_allowed(path: &Path, content: &str, force: bool) -> Result<()> {
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::PathBuf;
 
     fn temp_dir(label: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
