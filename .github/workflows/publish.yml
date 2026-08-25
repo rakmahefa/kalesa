@@ -1,0 +1,57 @@
+name: Publish Rust binary
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing GitHub Release tag to publish to (for example v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    name: Build and publish Linux binary
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+
+      - name: Verify release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release view "${{ inputs.release_tag }}" --repo "${{ github.repository }}"
+
+      - name: Rust Release binary
+        id: rust-release
+        uses: rust-build/rust-build.action@v1.4.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Native portable Linux release target supported by the action.
+          RUSTTARGET: x86_64-unknown-linux-musl
+          EXTRA_FILES: README.md
+          ARCHIVE_TYPES: tar.gz
+          ARCHIVE_NAME: kalesa-${{ inputs.release_tag }}-x86_64-unknown-linux-musl.tar.gz
+          MINIFY: false
+          TOOLCHAIN_VERSION: "1.85"
+          UPLOAD_MODE: none
+          STATIC_LINKING: true
+
+      - name: Upload binary to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.release_tag }}" \
+            "${{ steps.rust-release.outputs.BUILT_ARCHIVE }}" \
+            "${{ steps.rust-release.outputs.BUILT_CHECKSUM }}" \
+            --repo "${{ github.repository }}" \
+            --clobber
