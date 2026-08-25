@@ -4,7 +4,6 @@ use std::path::Path;
 
 use crate::domain::{LaunchOptions, Runner, RunnerKind};
 use crate::error::{KalesaError, Result};
-use crate::pipeline::detect::binary_type_name;
 use crate::{GameMetadata, GameTarget};
 
 pub const LAUNCHER_FORMAT_VERSION: u32 = 3;
@@ -27,7 +26,7 @@ pub fn write(
     let target_value = shell_single_quote(&target.path.to_string_lossy());
     let name_value = shell_single_quote(&metadata.name);
     let runner_value = shell_single_quote(runner.kind.as_str());
-    let binary_type_value = shell_single_quote(binary_type_name(target.binary_type));
+    let binary_type_value = shell_single_quote(target.binary_type.as_str());
     let wine_prefix_value = runner
         .wine_prefix
         .as_ref()
@@ -116,14 +115,13 @@ print_command() {{
 cd "$GAME_DIR"
 
 [[ -f "$CONFIG_FILE" ]] || fail "configuration not found: $CONFIG_FILE"
-[[ "$BINARY_TYPE" == "linux-elf" || "$BINARY_TYPE" == "appimage" || "$BINARY_TYPE" == "windows-pe" ]] || fail "unsupported binary type: $BINARY_TYPE"
+case "$BINARY_TYPE" in
+    linux|appimage|windows) ;;
+    *) fail "unsupported binary type: $BINARY_TYPE" ;;
+esac
 
 TARGET="$(resolve_path "$TARGET_VALUE")"
 [[ -f "$TARGET" ]] || fail "game executable not found: $TARGET"
-
-export_env() {{
-    :
-}}
 
 {runner_setup}
 
@@ -133,7 +131,7 @@ for wrapper in "${{CONFIG_WRAPPERS[@]}}"; do
     COMMAND+=("$(wrapper_command "$wrapper")")
 done
 
-COMMAND+=({runner_command})
+{runner_command}
 COMMAND+=("${{CONFIG_ARGS[@]}}")
 COMMAND+=("$@")
 
@@ -188,11 +186,12 @@ export WINEPREFIX="$(resolve_path "$WINE_PREFIX_VALUE")"
     }
 }
 
-fn runner_command(kind: RunnerKind) -> String {
+fn runner_command(kind: RunnerKind) -> &'static str {
     match kind {
-        RunnerKind::Native => r#""$TARGET" "# .to_string(),
-        RunnerKind::Wine => r#"wine "$TARGET" "#.to_string(),
-        RunnerKind::Proton => r#""$PROTON" run "$TARGET" "#.to_string(),
+        RunnerKind::Native => r#"COMMAND+=("$TARGET")"#,
+        RunnerKind::Wine => r#"require_command wine
+COMMAND+=("wine" "$TARGET")"#,
+        RunnerKind::Proton => r#"COMMAND+=("$PROTON" "run" "$TARGET")"#,
     }
 }
 
@@ -255,9 +254,10 @@ mod tests {
             BinaryType::WindowsPe,
         );
         let metadata = GameMetadata::new("My Game".into(), None);
+        let project_dir = PathBuf::from("/games/My Game");
         let runner = Runner::for_target_with_backend(
             &target,
-            PathBuf::from("/games/My Game").as_path(),
+            &project_dir,
             RunnerBackend::Wine,
             None,
             None,
@@ -279,9 +279,10 @@ mod tests {
         assert!(content.contains("CONFIG_WRAPPERS+=('gamemoderun')"));
         assert!(content.contains("export WINEDEBUG='-all'"));
         assert!(content.contains("COMMAND=()"));
+        assert!(content.contains("COMMAND+=(\"wine\" \"$TARGET\")"));
         assert!(content.contains("print_command \"Launching $GAME_NAME:\""));
         assert!(!content.contains("eval "));
-        assert!(!content.contains(" yq"));
+        assert!(!content.contains("yq"));
         assert!(!content.contains("sh -c"));
     }
 
