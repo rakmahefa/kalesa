@@ -100,7 +100,8 @@ pub fn write(
 }
 
 pub fn write_example(path: &Path) -> Result<()> {
-    let mut file = File::create(path).map_err(|e| KalesaError::io("creating configuration example", e))?;
+    let mut file =
+        File::create(path).map_err(|e| KalesaError::io("creating configuration example", e))?;
     file.write_all(CONFIG_EXAMPLE.as_bytes())
         .map_err(|e| KalesaError::io("writing configuration example", e))?;
     Ok(())
