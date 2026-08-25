@@ -265,13 +265,7 @@ mod tests {
         );
         let metadata = GameMetadata::new("My Game".into(), None);
         let project_dir = PathBuf::from("/games/My Game");
-        let runner = Runner::for_target_with_backend(
-            &target,
-            &project_dir,
-            RunnerBackend::Wine,
-            None,
-            None,
-        );
+        let runner = Runner::for_target_with_backend(&target, &project_dir, RunnerBackend::Wine, None, None);
         let mut env = BTreeMap::new();
         env.insert("WINEDEBUG".into(), "-all".into());
         let launch = LaunchOptions {
