@@ -37,8 +37,12 @@ pub fn render(
         .expect("writing to String cannot fail");
 
     if let Some(prefix_path) = &runner.wine_prefix {
-        writeln!(prefix, "WINE_PREFIX_VALUE={}", bash_quote(&path_text(prefix_path)?))
-            .expect("writing to String cannot fail");
+        writeln!(
+            prefix,
+            "WINE_PREFIX_VALUE={}",
+            bash_quote(&path_text(prefix_path)?)
+        )
+        .expect("writing to String cannot fail");
     } else {
         prefix.push_str("WINE_PREFIX_VALUE=''\n");
     }
@@ -50,8 +54,12 @@ pub fn render(
     }
 
     if let Some(proton_path) = &runner.proton_path {
-        writeln!(prefix, "PROTON_PATH_VALUE={}", bash_quote(&path_text(proton_path)?))
-            .expect("writing to String cannot fail");
+        writeln!(
+            prefix,
+            "PROTON_PATH_VALUE={}",
+            bash_quote(&path_text(proton_path)?)
+        )
+        .expect("writing to String cannot fail");
     } else {
         prefix.push_str("PROTON_PATH_VALUE=''\n");
     }
