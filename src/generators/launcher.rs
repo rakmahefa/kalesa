@@ -16,7 +16,12 @@ fn shell_quote_path(path: &Path) -> Result<String> {
     Ok(shell_quote(value))
 }
 
-pub fn write(path: &Path, target: &GameTarget, runner: &Runner, launch: &LaunchOptions) -> Result<()> {
+pub fn write(
+    path: &Path,
+    target: &GameTarget,
+    runner: &Runner,
+    launch: &LaunchOptions,
+) -> Result<()> {
     launch.validate()?;
     let executable = shell_quote_path(&target.path)?;
     let configured_args = launch
