@@ -1,6 +1,6 @@
 # kalesa
 
-Outil en ligne de commande qui prépare un dossier de jeu pour un lancement standardisé : validation du type de binaire (Windows PE / Linux ELF / AppImage), collecte de métadonnées, découverte d'icône, génération d'une config YAML, d'un script de lancement et d'entrées `.desktop` (freedesktop).
+Outil en ligne de commande qui prépare un dossier de jeu pour un lancement standardisé : validation du type de binaire (Windows PE / Linux ELF / AppImage), collecte de métadonnées, découverte d’icône, génération d’une configuration YAML versionnée, d’un script de lancement et d’entrées `.desktop` (freedesktop).
 
 ## Prérequis
 
@@ -16,7 +16,7 @@ kalesa <target> [options]
 
 ### Cible
 
-`target` est un exécutable PE Windows, un binaire ELF Linux ou une AppImage (`*.AppImage`). Kalesa valide l'en-tête ELF/PE avant de générer les artefacts.
+`target` est un exécutable PE Windows, un binaire ELF Linux ou une AppImage (`*.AppImage`). Kalesa valide l’en-tête ELF/PE avant de générer les artefacts.
 
 ### Métadonnées
 
@@ -31,7 +31,7 @@ kalesa <target> [options]
 
 Pour les cibles Linux/AppImage, Kalesa inspecte les fichiers `.desktop` voisins, puis cherche les icônes dans les chemins XDG (`XDG_DATA_HOME`, `XDG_DATA_DIRS`, thèmes hicolor et pixmaps), avant de revenir aux noms conventionnels voisins.
 
-Les fichiers `.desktop` AppImage suivent notamment les clés `X-AppImage-Name` et `X-AppImage-Version` lorsqu'elles sont présentes. citehttps://docs.appimage.org/reference/desktop-integration.html
+Les fichiers `.desktop` AppImage suivent notamment les clés `X-AppImage-Name` et `X-AppImage-Version` lorsqu’elles sont présentes. citehttps://docs.appimage.org/reference/desktop-integration.html
 
 ### Runner
 
@@ -41,18 +41,70 @@ Les fichiers `.desktop` AppImage suivent notamment les clés `X-AppImage-Name` e
 --proton-path PATH       Exécutable Proton
 ```
 
-`auto` choisit Native pour Linux/AppImage et Wine pour PE. Proton reste explicite afin d'éviter de modifier silencieusement le comportement d'une installation existante.
+`auto` choisit Native pour Linux/AppImage et Wine pour PE. Proton reste explicite afin d’éviter de modifier silencieusement le comportement d’une installation existante.
 
 ### Arguments et environnement
 
 ```text
 --arg VALUE              Argument à intégrer au launcher, répétable
---env KEY=VALUE           Variable d'environnement, répétable
+--env KEY=VALUE          Variable d’environnement, répétable
 ```
 
 Les valeurs sont shell-quotées et les noms de variables sont validés avant génération.
 
-### Génération
+## Configuration YAML
+
+Kalesa utilise une configuration YAML **versionnée**. Le format actuellement généré est **schema v2**.
+
+Exemple :
+
+```yaml
+schema_version: 2
+name: ChildofLight
+version: null
+developer: null
+description: null
+categories: []
+runner:
+  type: wine
+  wine:
+    prefix: /path/to/.workdir/wine
+    arch: win64
+  proton: null
+executable:
+  path: /path/to/ChildofLight.exe
+launch:
+  args: []
+  env: []
+```
+
+Le schéma v2 ajoute notamment :
+
+- `schema_version` pour identifier explicitement le format de configuration ;
+- les métadonnées optionnelles `version`, `developer`, `description` et `categories` ;
+- un runner explicite (`native`, `wine` ou `proton`) avec sa configuration ;
+- la section `launch` pour les arguments et variables d’environnement.
+
+### Migration v1 → v2
+
+Kalesa a évolué d’un ancien schéma v1 vers le schéma v2. Une configuration v1 peut notamment ressembler à ceci :
+
+```yaml
+name: ChildofLight
+runner:
+  type: windows
+  wine:
+    prefix: /path/to/.workdir/wine
+    arch: win64
+executable:
+  path: /path/to/ChildofLight.exe
+```
+
+Le schéma v2 est celui utilisé par le générateur actuel. Les anciennes façades d’API restent conservées pour la compatibilité avec les points d’entrée historiques de la v0.1.0, mais elles délèguent au générateur v2.
+
+Les fichiers de configuration déjà générés par une ancienne version de Kalesa ne sont pas automatiquement réécrits : relancer Kalesa sur la cible permet de régénérer les artefacts selon le format actuel.
+
+## Génération
 
 Kalesa crée :
 
@@ -65,21 +117,21 @@ game.desktop
 .directory
 ```
 
-Le schéma YAML est versionné (`schema_version: 2`) et contient le runner sélectionné, les métadonnées du jeu et les options de lancement.
+Le fichier `config.yaml` est généré en **schema v2**. Le launcher `launch.sh` est généré par le générateur actuel et prend en charge le runner sélectionné, les arguments configurés et les variables d’environnement.
 
 ## Détection du binaire
 
-- `\x7fELF` → Linux ; validation minimale de l'en-tête ELF.
+- `\x7fELF` → Linux ; validation minimale de l’en-tête ELF.
 - un ELF dont le chemin se termine par `.AppImage` → AppImage ; le fichier reste exécuté directement par le runtime AppImage.
 - `MZ` → PE ; `e_lfanew` puis `PE\0\0` sont obligatoirement présents.
 - tout format inconnu ou tronqué est rejeté.
 
-Le type 2 d'AppImage est conçu comme un exécutable ELF dont le runtime monte ensuite son système de fichiers SquashFS et lance `AppRun`. citehttps://docs.appimage.org/reference/architecture.html
+Le type 2 d’AppImage est conçu comme un exécutable ELF dont le runtime monte ensuite son système de fichiers SquashFS et lance `AppRun`. citehttps://docs.appimage.org/reference/architecture.html
 
 ## Sécurité des launchers
 
 - chemins et arguments sont shell-quotés ;
-- les variables d'environnement utilisent uniquement des noms valides ;
+- les variables d’environnement utilisent uniquement des noms valides ;
 - les entrées `.desktop` rejettent les retours à la ligne ;
 - un runner Wine/Proton explicitement demandé sur une cible non Windows est rejeté.
 
@@ -96,5 +148,6 @@ La CI GitHub exécute ces quatre contrôles.
 
 ## Limites connues / pistes futures
 
-- L'extraction de ressources internes d'une AppImage n'est pas exécutée automatiquement : Kalesa privilégie les métadonnées `.desktop`, les icônes XDG et les icônes voisines afin de ne pas exécuter/monter une image potentiellement non fiable.
-- Les tests d'intégration du pipeline complet et les fixtures PE/ELF réels restent à ajouter.
+- L’extraction de ressources internes d’une AppImage n’est pas exécutée automatiquement : Kalesa privilégie les métadonnées `.desktop`, les icônes XDG et les icônes voisines afin de ne pas exécuter/monter une image potentiellement non fiable.
+- Les tests d’intégration du pipeline complet et les fixtures PE/ELF réels restent à ajouter.
+- La gestion de migration automatique de configurations YAML v1 existantes n’est pas encore fournie ; la régénération avec Kalesa reste le chemin recommandé.
