@@ -27,16 +27,6 @@ pub fn write(
     let name_value = shell_single_quote(&metadata.name);
     let runner_value = shell_single_quote(runner.kind.as_str());
     let binary_type_value = shell_single_quote(target.binary_type.as_str());
-    let wine_prefix_value = runner
-        .wine_prefix
-        .as_ref()
-        .map(|value| shell_single_quote(&value.to_string_lossy()))
-        .unwrap_or_else(|| "''".to_string());
-    let proton_path_value = runner
-        .proton_path
-        .as_ref()
-        .map(|value| shell_single_quote(&value.to_string_lossy()))
-        .unwrap_or_else(|| "''".to_string());
 
     let args = bash_array("CONFIG_ARGS", &launch.args);
     let wrappers = bash_array("CONFIG_WRAPPERS", &launch.wrappers);
@@ -47,7 +37,7 @@ pub fn write(
 # Generated launch script - do not edit by hand, re-run kalesa instead.
 # Kalesa launcher format: {launcher_version}
 # Kalesa config schema: 3
-# Runtime values below are generated from {config_path}.
+# Runtime values below are generated from {config_path}; runner-specific nested values are read from that YAML at launch time.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
@@ -59,8 +49,8 @@ GAME_NAME={name}
 BINARY_TYPE={binary_type}
 RUNNER={runner}
 TARGET_VALUE={target}
-WINE_PREFIX_VALUE={wine_prefix}
-PROTON_PATH_VALUE={proton_path}
+WINE_PREFIX_VALUE=''
+PROTON_PATH_VALUE=''
 {args}
 {wrappers}
 {env}
@@ -82,6 +72,48 @@ resolve_path() {{
 require_command() {{
     local command_name="$1"
     command -v "$command_name" >/dev/null 2>&1 || fail "'$command_name' not found in PATH."
+}}
+
+yaml_nested_scalar() {{
+    local root="$1"
+    local nested="$2"
+    local key="$3"
+
+    awk -v root="$root" -v nested="$nested" -v key="$key" '
+        function clean_key(value) {{
+            sub(/^[[:space:]]+/, "", value)
+            sub(/:.*/, "", value)
+            return value
+        }}
+        function clean_scalar(value) {{
+            sub(/^[[:space:]]+/, "", value)
+            sub(/[[:space:]]+$/, "", value)
+            if (value == "null") return ""
+            if (value ~ /^\x27.*\x27$/) return substr(value, 2, length(value) - 2)
+            if (value ~ /^\".*\"$/) return substr(value, 2, length(value) - 2)
+            return value
+        }}
+        /^[^[:space:]][^:]*:/ {{
+            current_root = clean_key($0)
+            in_root = (current_root == root)
+            in_nested = 0
+            next
+        }}
+        in_root && /^[[:space:]][[:space:]][^[:space:]][^:]*:/ {{
+            current_nested = clean_key($0)
+            in_nested = (current_nested == nested)
+            next
+        }}
+        in_nested && /^[[:space:]][[:space:]][[:space:]][[:space:]][^[:space:]][^:]*:/ {{
+            current_key = clean_key($0)
+            if (current_key == key) {{
+                value = $0
+                sub(/^[[:space:]]+[^:]+:[[:space:]]*/, "", value)
+                print clean_scalar(value)
+                exit
+            }}
+        }}
+    ' "$CONFIG_FILE"
 }}
 
 require_wrapper() {{
@@ -120,6 +152,16 @@ case "$BINARY_TYPE" in
     *) fail "unsupported binary type: $BINARY_TYPE" ;;
 esac
 
+if [[ "$RUNNER" == "wine" || "$RUNNER" == "proton" ]]; then
+    WINE_PREFIX_VALUE="$(yaml_nested_scalar runner wine prefix)"
+    [[ -n "$WINE_PREFIX_VALUE" ]] || fail "runner.wine.prefix is missing in $CONFIG_FILE"
+fi
+
+if [[ "$RUNNER" == "proton" ]]; then
+    PROTON_PATH_VALUE="$(yaml_nested_scalar runner proton path)"
+    [[ -n "$PROTON_PATH_VALUE" ]] || fail "runner.proton.path is missing in $CONFIG_FILE"
+fi
+
 TARGET="$(resolve_path "$TARGET_VALUE")"
 [[ -f "$TARGET" ]] || fail "game executable not found: $TARGET"
 
@@ -145,8 +187,6 @@ exec "${{COMMAND[@]}}"
         binary_type = binary_type_value,
         runner = runner_value,
         target = target_value,
-        wine_prefix = wine_prefix_value,
-        proton_path = proton_path_value,
         args = args,
         wrappers = wrappers,
         env = env,
@@ -285,10 +325,13 @@ mod tests {
         assert!(content.contains("export WINEDEBUG='-all'"));
         assert!(content.contains("COMMAND=()"));
         assert!(content.contains("COMMAND+=(\"wine\" \"$TARGET\")"));
+        assert!(content.contains("yaml_nested_scalar runner wine prefix"));
+        assert!(content.contains("WINE_PREFIX_VALUE=''"));
         assert!(content.contains("echo \"[+] $label${rendered}\""));
         assert!(!content.contains("eval "));
         assert!(!content.contains("yq"));
         assert!(!content.contains("sh -c"));
+        assert!(!content.contains("/games/My Game/.workdir/wine"));
     }
 
     #[test]

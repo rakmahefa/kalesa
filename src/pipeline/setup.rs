@@ -73,6 +73,9 @@ pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()>
         &options.launch,
     )?;
 
+    let config_example_path = workdir.config.join("config.yaml.example");
+    config::write_example(&config_example_path)?;
+
     let launch_path = workdir.bin.join("launch.sh");
     launcher::write(
         &launch_path,
