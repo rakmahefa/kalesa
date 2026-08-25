@@ -60,7 +60,7 @@ pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()>
     let workdir = WorkDir::new();
     workdir.create()?;
 
-    let icon_path = materialize_icon(&target, &game_metadata, &workdir)?;
+    let icon_path = materialize_icon(&target, &game_metadata, options.icon.is_some(), &workdir)?;
     game_metadata.icon_path = icon_path;
 
     let config_path = workdir.config.join("config.yaml");
@@ -94,8 +94,10 @@ fn apply_overrides(metadata: &mut GameMetadata, options: &SetupOptions) {
 }
 
 fn validate_runner(target: &GameTarget, runner: &Runner) -> Result<()> {
-    if matches!(runner.kind, crate::domain::RunnerKind::Wine | crate::domain::RunnerKind::Proton)
-        && !target.binary_type.is_windows()
+    if matches!(
+        runner.kind,
+        crate::domain::RunnerKind::Wine | crate::domain::RunnerKind::Proton
+    ) && !target.binary_type.is_windows()
     {
         return Err(KalesaError::InvalidDesktopValue(
             "Wine/Proton runners can only be selected for Windows PE targets".into(),
@@ -113,8 +115,21 @@ fn validate_runner(target: &GameTarget, runner: &Runner) -> Result<()> {
 fn materialize_icon(
     target: &GameTarget,
     game_metadata: &GameMetadata,
+    explicit_icon: bool,
     workdir: &WorkDir,
 ) -> Result<Option<PathBuf>> {
+    if target.binary_type == BinaryType::WindowsPe && !explicit_icon {
+        let destination = workdir.icons.join("game_icon.png");
+        let contents = fs::read(&target.path)
+            .map_err(|e| KalesaError::io("reading PE icon resources", e))?;
+        if icon::extract_pe_icon(&contents, &destination) {
+            info!("Extracted icon from PE resources to {:?}", destination);
+            return Ok(Some(destination));
+        }
+        warn!("Could not extract an icon from PE resources");
+        return Ok(None);
+    }
+
     let Some(found) = game_metadata.icon_path.as_deref() else {
         warn!("No usable icon found for {:?}; using theme fallback", target.path);
         return Ok(None);
@@ -127,16 +142,6 @@ fn materialize_icon(
 
     let ext = found.extension().and_then(|e| e.to_str()).unwrap_or("png");
     let destination = workdir.icons.join(format!("game_icon.{ext}"));
-
-    if target.binary_type == BinaryType::WindowsPe {
-        let contents = fs::read(&target.path)
-            .map_err(|e| KalesaError::io("reading PE icon resources", e))?;
-        if icon::extract_pe_icon(&contents, &destination) {
-            return Ok(Some(destination));
-        }
-        return Ok(None);
-    }
-
     fs::copy(found, &destination)
         .map_err(|e| KalesaError::io("copying game icon", e))?;
     info!("Copied icon {:?} to {:?}", found, destination);
