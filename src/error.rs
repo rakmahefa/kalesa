@@ -26,6 +26,9 @@ pub enum KalesaError {
     #[error("invalid PE binary: {0}")]
     InvalidPe(PathBuf),
 
+    #[error("Windows runner requires a Wine prefix")]
+    MissingWinePrefix,
+
     #[error("invalid Desktop Entry value: {0}")]
     InvalidDesktopValue(String),
 
