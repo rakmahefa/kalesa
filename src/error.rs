@@ -29,6 +29,12 @@ pub enum KalesaError {
     #[error("Windows runner requires a Wine prefix")]
     MissingWinePrefix,
 
+    #[error("Proton runner requires a Proton executable path")]
+    MissingProtonPath,
+
+    #[error("invalid environment variable name: {0}")]
+    InvalidEnvironmentKey(String),
+
     #[error("invalid Desktop Entry value: {0}")]
     InvalidDesktopValue(String),
 
