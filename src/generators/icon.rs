@@ -1,6 +1,6 @@
 use image::ImageFormat;
 use pelite::PeFile;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub fn extract_pe_icon(pe_data: &[u8], output_path: &Path) -> bool {
     let pe = match PeFile::from_bytes(pe_data) {
@@ -37,7 +37,7 @@ pub fn extract_pe_icon(pe_data: &[u8], output_path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use std::path::PathBuf;
 
     fn temp_dir(label: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
@@ -45,8 +45,8 @@ mod tests {
             label,
             std::process::id()
         ));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
         dir
     }
 
@@ -56,6 +56,6 @@ mod tests {
         let output = dir.join("icon.png");
         assert!(!extract_pe_icon(b"not a pe file", &output));
         assert!(!output.exists());
-        let _ = fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
