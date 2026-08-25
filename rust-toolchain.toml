@@ -1,0 +1,7 @@
+[toolchain]
+# `edition = "2024"` (Cargo.toml) requires Cargo/rustc >= 1.85.
+# This pins the toolchain so `cargo build`/`rustup` fetch a compatible
+# compiler automatically instead of failing with a cryptic
+# "feature `edition2024` is required" error on older toolchains
+# (e.g. the ones currently shipped by several Linux distro package managers).
+channel = "1.85"
