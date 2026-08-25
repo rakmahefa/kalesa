@@ -5,6 +5,10 @@ use std::path::Path;
 use crate::domain::BinaryType;
 use crate::error::{KalesaError, Result};
 
+pub fn detect_binary_type(target_path: &Path) -> Result<BinaryType> {
+    detect(target_path)
+}
+
 pub fn detect(target_path: &Path) -> Result<BinaryType> {
     let mut file = File::open(target_path).map_err(|e| KalesaError::io("opening target", e))?;
     let mut header = [0u8; 16];
