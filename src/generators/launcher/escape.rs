@@ -14,7 +14,7 @@ pub fn bash_quote(value: &str) -> Result<String> {
 }
 
 pub fn push_array(out: &mut String, name: &str, values: &[String]) -> Result<()> {
-    write!(out, "{name}=\(").expect("writing to String cannot fail");
+    write!(out, "{name}=(").expect("writing to String cannot fail");
     for value in values {
         write!(out, " {}", bash_quote(value)?).expect("writing to String cannot fail");
     }
@@ -22,7 +22,10 @@ pub fn push_array(out: &mut String, name: &str, values: &[String]) -> Result<()>
     Ok(())
 }
 
-pub fn push_env(out: &mut String, env: &std::collections::BTreeMap<String, String>) -> Result<()> {
+pub fn push_env(
+    out: &mut String,
+    env: &std::collections::BTreeMap<String, String>,
+) -> Result<()> {
     for (key, value) in env {
         write!(out, "export {key}={};\n", bash_quote(value)?)
             .expect("writing to String cannot fail");
