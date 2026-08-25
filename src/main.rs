@@ -65,9 +65,9 @@ fn parse_env(entries: Vec<String>) -> kalesa::error::Result<Vec<(String, String)
     entries
         .into_iter()
         .map(|entry| {
-            let (key, value) = entry.split_once('=').ok_or_else(|| {
-                kalesa::error::KalesaError::InvalidEnvironmentKey(entry.clone())
-            })?;
+            let (key, value) = entry
+                .split_once('=')
+                .ok_or_else(|| kalesa::error::KalesaError::InvalidEnvironmentKey(entry.clone()))?;
             Ok((key.to_string(), value.to_string()))
         })
         .collect()
