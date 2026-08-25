@@ -30,9 +30,8 @@ pub fn collect(target: &GameTarget, custom_name: Option<&str>) -> GameMetadata {
         }
 
         if metadata.icon_path.is_none() {
-            metadata.icon_path = find_sibling_icon(&target.path).or_else(|| {
-                find_xdg_icon(&target.path, &metadata.name.to_ascii_lowercase())
-            });
+            metadata.icon_path = find_sibling_icon(&target.path)
+                .or_else(|| find_xdg_icon(&target.path, &metadata.name.to_ascii_lowercase()));
         }
     }
 
@@ -105,7 +104,9 @@ fn parse_desktop_metadata(path: &Path) -> ParsedDesktop {
         return parsed;
     };
     for line in content.lines() {
-        let Some((key, value)) = line.split_once('=') else { continue };
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
         let value = value.trim();
         match key {
             "Name" if parsed.name.is_none() => parsed.name = Some(value.to_string()),
@@ -150,11 +151,20 @@ fn find_xdg_icon(target_path: &Path, name: &str) -> Option<PathBuf> {
         roots.push(PathBuf::from(home).join(".local/share"));
     }
 
-    let data_dirs = env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
-    roots.extend(data_dirs.split(':').filter(|s| !s.is_empty()).map(PathBuf::from));
+    let data_dirs =
+        env::var("XDG_DATA_DIRS").unwrap_or_else(|_| "/usr/local/share:/usr/share".into());
+    roots.extend(
+        data_dirs
+            .split(':')
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from),
+    );
 
     let icon_exts = ["png", "svg", "xpm"];
-    let sizes = ["scalable", "512x512", "256x256", "128x128", "64x64", "48x48", "32x32", "24x24", "16x16"];
+    let sizes = [
+        "scalable", "512x512", "256x256", "128x128", "64x64", "48x48", "32x32", "24x24",
+        "16x16",
+    ];
 
     for root in &roots {
         for size in sizes {
@@ -177,7 +187,10 @@ fn find_xdg_icon(target_path: &Path, name: &str) -> Option<PathBuf> {
         }
     }
 
-    target_path.parent().map(|dir| dir.join(name)).filter(|p| p.is_file())
+    target_path
+        .parent()
+        .map(|dir| dir.join(name))
+        .filter(|p| p.is_file())
 }
 
 #[cfg(test)]
@@ -186,7 +199,10 @@ mod tests {
     use std::fs;
 
     fn temp_dir(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("kalesa_metadata_test_{label}_{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "kalesa_metadata_test_{label}_{}",
+            std::process::id()
+        ));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
