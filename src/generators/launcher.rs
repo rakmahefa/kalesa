@@ -18,10 +18,8 @@ pub fn write(
 ) -> Result<()> {
     launch.validate()?;
 
-    let content = LAUNCHER_TEMPLATE.replace(
-        "__KalesaVersion__",
-        &LAUNCHER_FORMAT_VERSION.to_string(),
-    );
+    let content =
+        LAUNCHER_TEMPLATE.replace("__KalesaVersion__", &LAUNCHER_FORMAT_VERSION.to_string());
 
     let mut file = File::create(path).map_err(|e| KalesaError::io("creating launch script", e))?;
     file.write_all(content.as_bytes())
@@ -408,8 +406,8 @@ exec "${COMMAND[@]}"
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{BinaryType, GameTarget, LaunchOptions, RunnerBackend};
     use crate::GameMetadata;
+    use crate::domain::{BinaryType, GameTarget, LaunchOptions, RunnerBackend};
     use std::fs;
     use std::path::PathBuf;
 
