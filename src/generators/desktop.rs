@@ -98,7 +98,7 @@ pub fn write_with_metadata(
     };
 
     let mut desktop_content = format!(
-        "[Desktop Entry]\nType=Application\nName={name}\nExec={exec}\nIcon={icon}\nTerminal=false\nCategories={categories}\n"
+        "[Desktop Entry]\nType=Application\nName={name}\nExec={exec}\nIcon={icon}\nTerminal=true\nCategories={categories}\n"
     );
     if let Some(value) = version {
         desktop_content.push_str(&format!("X-Kalesa-Version={value}\n"));
