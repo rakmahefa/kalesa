@@ -24,6 +24,9 @@ pub fn detect(target_path: &Path) -> Result<BinaryType> {
         {
             return Err(KalesaError::InvalidElf(target_path.to_path_buf()));
         }
+        if is_appimage_path(target_path) {
+            return Ok(BinaryType::AppImage);
+        }
         return Ok(BinaryType::LinuxElf);
     }
 
@@ -35,6 +38,12 @@ pub fn detect(target_path: &Path) -> Result<BinaryType> {
     }
 
     Err(KalesaError::UnsupportedBinary(target_path.to_path_buf()))
+}
+
+fn is_appimage_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("appimage"))
 }
 
 fn confirm_pe_signature(file: &mut File) -> Result<bool> {
@@ -74,11 +83,8 @@ mod tests {
 
     fn write_temp(name: &str, bytes: &[u8]) -> PathBuf {
         let counter = TEMP_DIR_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!(
-            "kalesa_detect_{}_{}",
-            std::process::id(),
-            counter
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("kalesa_detect_{}_{}", std::process::id(), counter));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join(name);
         let mut file = fs::File::create(&path).unwrap();
@@ -95,6 +101,17 @@ mod tests {
         data[6] = 1;
         let path = write_temp("test.elf", &data);
         assert_eq!(detect(&path).unwrap(), BinaryType::LinuxElf);
+    }
+
+    #[test]
+    fn detects_valid_appimage_by_extension() {
+        let mut data = vec![0u8; 16];
+        data[..4].copy_from_slice(b"\x7fELF");
+        data[4] = 2;
+        data[5] = 1;
+        data[6] = 1;
+        let path = write_temp("MyGame.AppImage", &data);
+        assert_eq!(detect(&path).unwrap(), BinaryType::AppImage);
     }
 
     #[test]

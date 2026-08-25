@@ -6,9 +6,11 @@ pub mod icon;
 pub mod launcher;
 pub mod pipeline;
 
-pub use domain::{BinaryType, GameMetadata, GameTarget, Runner, RunnerKind};
+pub use domain::{
+    BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner, RunnerBackend, RunnerKind,
+};
 pub use pipeline::detect::detect_binary_type;
-pub use pipeline::run as run_setup;
+pub use pipeline::{SetupOptions, run as run_setup, run_with_options as run_setup_with_options};
 
 #[cfg(test)]
 mod tests {
@@ -18,7 +20,8 @@ mod tests {
     use std::path::PathBuf;
 
     fn write_temp(name: &str, bytes: &[u8]) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("kalesa_bintest_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("kalesa_bintest_{}_{}", std::process::id(), name));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join(name);
@@ -43,5 +46,12 @@ mod tests {
             detect_binary_type(&path),
             Err(error::KalesaError::UnsupportedBinary(_))
         ));
+    }
+
+    #[test]
+    fn auto_runner_maps_appimage_to_native() {
+        let target = GameTarget::new(PathBuf::from("game.AppImage"), BinaryType::AppImage);
+        let runner = Runner::for_target(&target, std::path::Path::new("/tmp/game"));
+        assert_eq!(runner.kind, RunnerKind::Native);
     }
 }

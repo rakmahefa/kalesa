@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::domain::{BinaryType, GameTarget, Runner};
+use crate::domain::{BinaryType, GameTarget, LaunchOptions, Runner, RunnerKind};
 use crate::error::Result;
 
 pub fn write_launch_script(
@@ -11,10 +11,11 @@ pub fn write_launch_script(
 ) -> Result<()> {
     let target = GameTarget::new(executable_path.to_path_buf(), binary_type);
     let runner = Runner {
-        kind: crate::domain::RunnerKind::for_binary(binary_type),
+        kind: RunnerKind::for_binary(binary_type),
         wine_prefix: wine_prefix.map(Path::to_path_buf),
+        proton_path: None,
     };
-    crate::generators::launcher::write(path, &target, &runner)
+    crate::generators::launcher::write(path, &target, &runner, &LaunchOptions::default())
 }
 
 pub fn write_desktop_entries(

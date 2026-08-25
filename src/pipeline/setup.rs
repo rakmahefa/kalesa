@@ -3,75 +3,160 @@ use std::path::{Path, PathBuf};
 
 use log::{info, warn};
 
-use crate::domain::{BinaryType, GameTarget, Runner};
+use crate::domain::{BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner, RunnerBackend};
 use crate::error::{KalesaError, Result};
 use crate::generators::{config, desktop, icon, launcher};
 use crate::pipeline::{detect, metadata};
 
+#[derive(Debug, Clone, Default)]
+pub struct SetupOptions {
+    pub name: Option<String>,
+    pub developer: Option<String>,
+    pub version: Option<String>,
+    pub description: Option<String>,
+    pub categories: Vec<String>,
+    pub icon: Option<PathBuf>,
+    pub runner: RunnerBackend,
+    pub wine_prefix: Option<PathBuf>,
+    pub proton_path: Option<PathBuf>,
+    pub launch: LaunchOptions,
+    pub force: bool,
+}
+
 pub fn run(target_path: &Path, custom_name: Option<String>, force: bool) -> Result<()> {
+    let options = SetupOptions {
+        name: custom_name,
+        force,
+        ..SetupOptions::default()
+    };
+    run_with_options(target_path, options)
+}
+
+pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()> {
     validate_target(target_path)?;
-    let canonical_target = fs::canonicalize(target_path)
-        .map_err(|e| KalesaError::io("canonicalizing target", e))?;
+    options.launch.validate()?;
+
+    let canonical_target =
+        fs::canonicalize(target_path).map_err(|e| KalesaError::io("canonicalizing target", e))?;
     let current_dir =
         std::env::current_dir().map_err(|e| KalesaError::io("reading current directory", e))?;
 
     let binary_type = detect::detect(&canonical_target)?;
     let target = GameTarget::new(canonical_target.clone(), binary_type);
-    let metadata = metadata::collect(&target, custom_name.as_deref());
-    let runner = Runner::for_target(&target, &current_dir);
+    let mut game_metadata = metadata::collect(&target, options.name.as_deref());
+    apply_overrides(&mut game_metadata, &options);
+    let runner = Runner::for_target_with_backend(
+        &target,
+        &current_dir,
+        options.runner,
+        options.wine_prefix.clone(),
+        options.proton_path.clone(),
+    );
+    validate_runner(&target, &runner)?;
+
     info!("Detected target binary type: {}", binary_type.as_str());
+    info!("Selected runner backend: {}", runner.kind.as_str());
 
     let workdir = WorkDir::new();
     workdir.create()?;
 
-    let icon_path = match binary_type {
-        BinaryType::WindowsPe => {
-            let output = workdir.icons.join("game_icon.png");
-            let contents = fs::read(&canonical_target)
-                .map_err(|e| KalesaError::io("reading PE icon resources", e))?;
-            if icon::extract_pe_icon(&contents, &output) {
-                info!("Extracted icon from PE resources to {:?}", output);
-                Some(output)
-            } else {
-                warn!("Could not extract an icon from the PE resources of {:?}", canonical_target);
-                None
-            }
-        }
-        BinaryType::LinuxElf => match metadata.icon_path {
-            Some(found) => {
-                let ext = found.extension().and_then(|e| e.to_str()).unwrap_or("png");
-                let destination = workdir.icons.join(format!("game_icon.{ext}"));
-                if fs::copy(&found, &destination).is_ok() {
-                    info!("Copied sibling icon {:?} to {:?}", found, destination);
-                    Some(destination)
-                } else {
-                    warn!("Could not copy sibling icon {:?}", found);
-                    None
-                }
-            }
-            None => {
-                warn!("No sibling icon found next to {:?}", canonical_target);
-                None
-            }
-        },
-    };
+    let icon_path = materialize_icon(&target, &game_metadata, options.icon.is_some(), &workdir)?;
+    game_metadata.icon_path = icon_path;
 
     let config_path = workdir.config.join("config.yaml");
-    config::write(&config_path, &target, &metadata.name, &runner, &current_dir)?;
-
-    let launch_path = workdir.bin.join("launch.sh");
-    launcher::write(&launch_path, &target, &runner)?;
-
-    desktop::write(
-        &metadata.name,
-        &current_dir,
-        icon_path.as_deref(),
-        &current_dir,
-        force,
+    config::write(
+        &config_path,
+        &target,
+        &game_metadata,
+        &runner,
+        &options.launch,
     )?;
 
-    info!("Architecture setup completed successfully for {}", metadata.name);
+    let launch_path = workdir.bin.join("launch.sh");
+    launcher::write(&launch_path, &target, &runner, &options.launch)?;
+
+    desktop::write_with_metadata(&game_metadata, &current_dir, &current_dir, options.force)?;
+
+    info!("Setup completed successfully for {}", game_metadata.name);
     Ok(())
+}
+
+fn apply_overrides(metadata: &mut GameMetadata, options: &SetupOptions) {
+    if let Some(value) = &options.developer {
+        metadata.developer = Some(value.clone());
+    }
+    if let Some(value) = &options.version {
+        metadata.version = Some(value.clone());
+    }
+    if let Some(value) = &options.description {
+        metadata.description = Some(value.clone());
+    }
+    if !options.categories.is_empty() {
+        metadata.categories = options.categories.clone();
+    }
+    if let Some(path) = &options.icon {
+        metadata.icon_path = Some(path.clone());
+    }
+}
+
+fn validate_runner(target: &GameTarget, runner: &Runner) -> Result<()> {
+    if matches!(
+        runner.kind,
+        crate::domain::RunnerKind::Wine | crate::domain::RunnerKind::Proton
+    ) && !target.binary_type.is_windows()
+    {
+        return Err(KalesaError::InvalidDesktopValue(
+            "Wine/Proton runners can only be selected for Windows PE targets".into(),
+        ));
+    }
+    if runner.is_proton() && runner.proton_path.is_none() {
+        return Err(KalesaError::MissingProtonPath);
+    }
+    if runner.is_wine() && runner.wine_prefix.is_none() {
+        return Err(KalesaError::MissingWinePrefix);
+    }
+    Ok(())
+}
+
+fn materialize_icon(
+    target: &GameTarget,
+    game_metadata: &GameMetadata,
+    explicit_icon: bool,
+    workdir: &WorkDir,
+) -> Result<Option<PathBuf>> {
+    if target.binary_type == BinaryType::WindowsPe && !explicit_icon {
+        let destination = workdir.icons.join("game_icon.png");
+        let contents =
+            fs::read(&target.path).map_err(|e| KalesaError::io("reading PE icon resources", e))?;
+        if icon::extract_pe_icon(&contents, &destination) {
+            info!("Extracted icon from PE resources to {:?}", destination);
+            return Ok(Some(destination));
+        }
+        warn!("Could not extract an icon from PE resources");
+        return Ok(None);
+    }
+
+    let Some(found) = game_metadata.icon_path.as_deref() else {
+        warn!(
+            "No usable icon found for {:?}; using theme fallback",
+            target.path
+        );
+        return Ok(None);
+    };
+
+    if !found.is_file() {
+        warn!(
+            "Configured icon {:?} does not exist; using theme fallback",
+            found
+        );
+        return Ok(None);
+    }
+
+    let ext = found.extension().and_then(|e| e.to_str()).unwrap_or("png");
+    let destination = workdir.icons.join(format!("game_icon.{ext}"));
+    fs::copy(found, &destination).map_err(|e| KalesaError::io("copying game icon", e))?;
+    info!("Copied icon {:?} to {:?}", found, destination);
+    Ok(Some(destination))
 }
 
 fn validate_target(target_path: &Path) -> Result<()> {
@@ -104,8 +189,7 @@ impl WorkDir {
 
     fn create(&self) -> Result<()> {
         for dir in [&self.root, &self.config, &self.bin, &self.icons] {
-            fs::create_dir_all(dir)
-                .map_err(|e| KalesaError::io("creating workdir", e))?;
+            fs::create_dir_all(dir).map_err(|e| KalesaError::io("creating workdir", e))?;
         }
         Ok(())
     }

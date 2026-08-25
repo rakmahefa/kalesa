@@ -55,12 +55,16 @@ Les façades historiques conservent les points d'entrée publics de la v0.1.0 to
 
 ## Phase 4 — Fonctionnalités
 
-- [ ] Support AppImage.
-- [ ] Améliorer la découverte d'icônes Linux/XDG.
-- [ ] Arguments de lancement.
-- [ ] Variables d'environnement.
-- [ ] Backends Wine/Proton configurables.
-- [ ] Métadonnées du jeu.
+- [x] Support AppImage.
+- [x] Améliorer la découverte d'icônes Linux/XDG et des métadonnées `.desktop`.
+- [x] Arguments de lancement (`--arg`).
+- [x] Variables d'environnement (`--env KEY=VALUE`).
+- [x] Backends Wine/Proton configurables (`--runner`, `--wine-prefix`, `--proton-path`).
+- [x] Métadonnées du jeu (`--developer`, `--version`, `--description`, `--category`, `--icon`).
+
+### Limite AppImage
+
+Kalesa reconnaît et lance directement les AppImages de type Linux via leur en-tête ELF et l'extension `.AppImage`. L'extraction automatique de ressources internes de l'AppImage n'est pas effectuée afin de ne pas exécuter ou monter une image potentiellement non fiable ; les fichiers `.desktop`, icônes XDG et icônes voisines sont utilisés lorsqu'ils sont disponibles.
 
 ## Ordre d'exécution
 
