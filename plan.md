@@ -2,13 +2,17 @@
 
 ## Phase 1 — Robustesse
 
-- [ ] Introduire un `BinaryType` fort et supprimer les couples `(&str, bool)`.
-- [ ] Utiliser `PathBuf` / `Path` pour les chemins internes et éviter les assemblages de chemins par concaténation de chaînes.
-- [ ] Valider strictement les exécutables ELF et PE et refuser les formats inconnus ou invalides.
-- [ ] Sécuriser la génération de `launch.sh` avec un escaping shell correct.
-- [ ] Sécuriser la génération des fichiers `.desktop` conformément au format Desktop Entry.
-- [ ] Introduire des erreurs typées et préserver les causes d'I/O, de parsing et de génération.
-- [ ] Ajouter des tests de régression couvrant les chemins et noms de fichiers contenant des caractères spéciaux.
+- [x] Introduire un `BinaryType` fort et supprimer les couples `(&str, bool)`.
+- [x] Utiliser `PathBuf` / `Path` pour les chemins internes et éviter les assemblages de chemins par concaténation de chaînes.
+- [x] Valider strictement les exécutables ELF et PE et refuser les formats inconnus ou invalides.
+- [x] Sécuriser la génération de `launch.sh` avec un escaping shell correct.
+- [x] Sécuriser la génération des fichiers `.desktop` conformément au format Desktop Entry.
+- [x] Introduire des erreurs typées et préserver les causes d'I/O, de parsing et de génération.
+- [x] Ajouter des tests de régression couvrant les chemins et noms de fichiers contenant des caractères spéciaux.
+
+### Validation Phase 1
+
+Les tests unitaires et de régression ont été ajoutés. La validation `cargo test` n'a pas pu être exécutée dans l'environnement d'outillage utilisé pour cette session, car `cargo`/`rustc` ne sont pas disponibles localement et l'accès réseau direct est indisponible.
 
 ## Phase 2 — Qualité
 
