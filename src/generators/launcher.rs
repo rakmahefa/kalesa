@@ -196,7 +196,7 @@ mod tests {
         let content = fs::read_to_string(&path).unwrap();
 
         assert!(content.contains(
-            "CONFIG_FILE=\"$GAME_DIR/.workdir/config/game \\\'file.yaml\""
+            "CONFIG_FILE=\"$GAME_DIR/.workdir/config/game 'file.yaml\""
         ));
     }
 
@@ -209,8 +209,7 @@ mod tests {
 
         write(&path, &config).unwrap();
         let content = fs::read_to_string(&path).unwrap();
-        let expected = format!("CONFIG_FILE={}
-", shell_quote(config.to_str().unwrap()));
+        let expected = format!("CONFIG_FILE={}\n", shell_quote(config.to_str().unwrap()));
 
         assert!(content.contains(expected.trim_end()));
     }
