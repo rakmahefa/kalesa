@@ -107,9 +107,9 @@ wrapper_command() {{
 print_command() {{
     local label="$1"
     shift
-    printf '[+] %s' "$label"
-    printf ' %q' "$@"
-    printf '\n'
+    local rendered
+    rendered="$(printf ' %q' "$@")"
+    echo "[+] $label${{rendered}}"
 }}
 
 cd "$GAME_DIR"
@@ -280,7 +280,7 @@ mod tests {
         assert!(content.contains("export WINEDEBUG='-all'"));
         assert!(content.contains("COMMAND=()"));
         assert!(content.contains("COMMAND+=(\"wine\" \"$TARGET\")"));
-        assert!(content.contains("print_command \"Launching $GAME_NAME:\""));
+        assert!(content.contains("echo \"[+] $label${rendered}\""));
         assert!(!content.contains("eval "));
         assert!(!content.contains("yq"));
         assert!(!content.contains("sh -c"));
