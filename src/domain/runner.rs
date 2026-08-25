@@ -17,6 +17,12 @@ pub enum RunnerBackend {
     Proton,
 }
 
+impl Default for RunnerBackend {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
 impl RunnerBackend {
     pub fn as_str(self) -> &'static str {
         match self {
