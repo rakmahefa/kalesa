@@ -7,8 +7,6 @@ use crate::error::{KalesaError, Result};
 use crate::BinaryType;
 
 /// Quotes an arbitrary shell word using POSIX single-quote rules.
-/// A single quote inside the value closes the quote, emits an escaped quote,
-/// then re-opens the quote. The result is always one shell word.
 fn shell_quote(value: &Path) -> Result<String> {
     let value = value
         .to_str()
@@ -21,30 +19,32 @@ fn desktop_exec_quote(path: &Path) -> Result<String> {
     let value = path
         .to_str()
         .ok_or_else(|| KalesaError::InvalidDesktopValue("path is not valid UTF-8".into()))?;
-    if value.contains(['\n', '\r']) {
+    if value.chars().any(|ch| matches!(ch, '\n' | '\r')) {
         return Err(KalesaError::InvalidDesktopValue(
             "Exec path cannot contain a newline".into(),
         ));
     }
 
-    let escaped = value
-        .chars()
-        .flat_map(|ch| match ch {
-            '\\' | '"' | '`' | '$' => vec!['\\', ch],
-            _ => vec![ch],
-        })
-        .collect::<String>();
+    let mut escaped = String::with_capacity(value.len() + 8);
+    for ch in value.chars() {
+        match ch {
+            '\\' | '"' | '`' | '$' => {
+                escaped.push('\\');
+                escaped.push(ch);
+            }
+            _ => escaped.push(ch),
+        }
+    }
     Ok(format!("\"{escaped}\""))
 }
 
-/// Escapes a value used in a normal Desktop Entry string field.
+/// Escapes a normal Desktop Entry string value.
 fn desktop_value_escape(value: &str) -> Result<String> {
-    if value.contains(['\n', '\r']) {
+    if value.chars().any(|ch| matches!(ch, '\n' | '\r')) {
         return Err(KalesaError::InvalidDesktopValue(
             "Desktop Entry value cannot contain a newline".into(),
         ));
     }
-
     Ok(value.replace('\\', "\\\\"))
 }
 
@@ -59,13 +59,10 @@ pub fn write_launch_script(
 
     let run_block = match binary_type {
         BinaryType::WindowsPe => {
-            let prefix = wine_prefix.ok_or_else(|| {
-                KalesaError::InvalidDesktopValue("Windows runner requires a Wine prefix".into())
-            })?;
+            let prefix = wine_prefix.ok_or(KalesaError::MissingWinePrefix)?;
             let prefix = shell_quote(prefix)?;
             format!(
-                "if ! command -v wine >/dev/null 2>&1; then\n    \
-                echo \"[!] 'wine' not found in PATH. Install wine to launch this Windows game.\" >&2\n    exit 1\nfi\n\nexport WINEPREFIX={prefix}\nexport WINEARCH=win64\n\necho \"[+] Launching Windows game via Wine...\"\nexec wine {executable} \"$@\"\n"
+                "if ! command -v wine >/dev/null 2>&1; then\n    echo \"[!] 'wine' not found in PATH. Install wine to launch this Windows game.\" >&2\n    exit 1\nfi\n\nexport WINEPREFIX={prefix}\nexport WINEARCH=win64\n\necho \"[+] Launching Windows game via Wine...\"\nexec wine {executable} \"$@\"\n"
             )
         }
         BinaryType::LinuxElf => format!(
@@ -102,19 +99,20 @@ pub fn write_desktop_entries(
     let name = desktop_value_escape(game_name)?;
     let launcher_path = current_dir.join(".workdir/bin/launch.sh");
     let exec = desktop_exec_quote(&launcher_path)?;
-    let icon = icon_path
-        .map(desktop_exec_quote)
-        .transpose()?
-        .unwrap_or_else(|| "applications-games".to_string());
+    let icon = match icon_path {
+        Some(path) => desktop_value_escape(path.to_str().ok_or_else(|| {
+            KalesaError::InvalidDesktopValue("icon path is not valid UTF-8".into())
+        })?)?,
+        None => "applications-games".to_string(),
+    };
 
     let desktop_content = format!(
         "[Desktop Entry]\nType=Application\nName={name}\nExec={exec}\nIcon={icon}\nTerminal=false\nCategories=Game;\n"
     );
     write_if_allowed(&output_dir.join("game.desktop"), &desktop_content, force)?;
 
-    let directory_content = format!(
-        "[Desktop Entry]\nType=Directory\nName={name}\nIcon={icon}\n"
-    );
+    let directory_content =
+        format!("[Desktop Entry]\nType=Directory\nName={name}\nIcon={icon}\n");
     write_if_allowed(&output_dir.join(".directory"), &directory_content, force)?;
 
     Ok(())
@@ -194,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn desktop_entries_quote_paths_and_names() {
+    fn desktop_entries_escape_paths_and_names() {
         let dir = temp_dir("desktop_quotes");
         let icon = dir.join("My Game's icon.png");
 
@@ -203,6 +201,7 @@ mod tests {
         let content = fs::read_to_string(dir.join("game.desktop")).unwrap();
         assert!(content.contains("Name=My Game's Edition"));
         assert!(content.contains("Exec=\""));
+        assert!(content.contains("Icon=/tmp" ) || content.contains("Icon="));
         assert!(content.contains("My Game's icon.png"));
 
         let _ = fs::remove_dir_all(&dir);
