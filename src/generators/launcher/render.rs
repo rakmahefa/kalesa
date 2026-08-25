@@ -27,8 +27,12 @@ pub fn render(
         .expect("writing to String cannot fail");
     writeln!(prefix, "GAME_NAME={}", bash_quote(&metadata.name)?)
         .expect("writing to String cannot fail");
-    writeln!(prefix, "TARGET_VALUE={}", bash_quote(&path_text(&target.path)?))
-        .expect("writing to String cannot fail");
+    writeln!(
+        prefix,
+        "TARGET_VALUE={}",
+        bash_quote(&path_text(&target.path)?)
+    )
+    .expect("writing to String cannot fail");
     writeln!(prefix, "RUNNER={}", bash_quote(runner.kind.as_str()))
         .expect("writing to String cannot fail");
 
@@ -64,9 +68,9 @@ pub fn render(
 }
 
 fn path_text(path: &Path) -> Result<String> {
-    path.to_str()
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| crate::error::KalesaError::InvalidDesktopValue("path is not valid UTF-8".into()))
+    path.to_str().map(ToOwned::to_owned).ok_or_else(|| {
+        crate::error::KalesaError::InvalidDesktopValue("path is not valid UTF-8".into())
+    })
 }
 
 fn runner_command(kind: RunnerKind) -> &'static str {
