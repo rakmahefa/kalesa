@@ -88,7 +88,7 @@ yaml_nested_scalar() {{
             sub(/^[[:space:]]+/, "", value)
             sub(/[[:space:]]+$/, "", value)
             if (value == "null") return ""
-            if (value ~ /^'"'"'.*'"'"'$/) return substr(value, 2, length(value) - 2)
+            if (value ~ /^\x27.*\x27$/) return substr(value, 2, length(value) - 2)
             if (value ~ /^\".*\"$/) return substr(value, 2, length(value) - 2)
             return value
         }
@@ -98,12 +98,12 @@ yaml_nested_scalar() {{
             in_child = 0
             next
         }}
-        in_parent && /^[[:space:]]{{2}}[^[:space:]][^:]*:/ {{
+        in_parent && /^[[:space:]][[:space:]][^[:space:]][^:]*:/ {{
             current_child = clean_key($0)
             in_child = (current_child == child)
             next
         }}
-        in_child && /^[[:space:]]{{4}}[^[:space:]][^:]*:/ {{
+        in_child && /^[[:space:]][[:space:]][[:space:]][[:space:]][^[:space:]][^:]*:/ {{
             key = clean_key($0)
             if (key == child) {{
                 value = $0
