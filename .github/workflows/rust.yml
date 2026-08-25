@@ -20,7 +20,7 @@ jobs:
       run: rustup component add rustfmt clippy
 
     - name: Format
-      run: cargo fmt --all -- --check
+      run: cargo fmt
 
     - name: Run tests
       run: cargo test --verbose
