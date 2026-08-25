@@ -1,4 +1,3 @@
-mod escape;
 mod render;
 mod template;
 
@@ -76,11 +75,10 @@ fn validate_inputs(target: &GameTarget, metadata: &GameMetadata, runner: &Runner
 mod tests {
     use super::*;
     use crate::domain::{BinaryType, RunnerBackend};
-    use std::collections::BTreeMap;
     use std::path::PathBuf;
 
     #[test]
-    fn renders_without_yaml_parser() {
+    fn renders_runtime_that_reads_mutable_yaml() {
         let target = GameTarget::new(PathBuf::from("Child of Light.exe"), BinaryType::WindowsPe);
         let runner = Runner::for_target_with_backend(
             &target,
@@ -89,13 +87,7 @@ mod tests {
             None,
             None,
         );
-        let mut env = BTreeMap::new();
-        env.insert("WINEDEBUG".into(), "-all".into());
-        let launch = LaunchOptions {
-            args: vec!["--language=fr".into(), "argument with spaces".into()],
-            env,
-            wrappers: vec!["gamemoderun".into(), "mangohud".into()],
-        };
+        let launch = LaunchOptions::default();
 
         let rendered = render::render(
             &target,
@@ -109,12 +101,17 @@ mod tests {
 
         assert!(rendered.content.contains("Kalesa launcher format: 4"));
         assert!(rendered.content.contains("Kalesa config schema: 3"));
-        assert!(rendered.content.contains("Child of Light.exe"));
-        assert!(rendered.content.contains("WINEDEBUG='-all'"));
-        assert!(rendered.content.contains("'argument with spaces'"));
-        assert!(!rendered.content.contains("awk '"));
-        assert!(!rendered.content.contains("yq"));
-        assert!(!rendered.content.contains("eval "));
-        assert!(!rendered.content.contains("sh -c"));
+        assert!(rendered.content.contains("require_command yq"));
+        assert!(rendered
+            .content
+            .contains("yq -r '.executable.path // \"\"' \"$CONFIG_FILE\""));
+        assert!(rendered
+            .content
+            .contains("yq -r '.runner.type // \"\"' \"$CONFIG_FILE\""));
+        assert!(rendered.content.contains(".launch.args[]?"));
+        assert!(rendered.content.contains(".launch.wrappers[]?"));
+        assert!(rendered.content.contains(".launch.env // {}"));
+        assert!(!rendered.content.contains("Child of Light.exe\"\nRUNNER='wine'"));
+        assert!(!rendered.content.contains("CONFIG_ARGS=( '--language=fr'"));
     }
 }
