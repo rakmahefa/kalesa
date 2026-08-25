@@ -38,9 +38,9 @@ pub fn run_with_options(target_path: &Path, options: SetupOptions) -> Result<()>
 
     let canonical_target =
         fs::canonicalize(target_path).map_err(|e| KalesaError::io("canonicalizing target", e))?;
-    let target_dir = canonical_target.parent().ok_or_else(|| {
-        KalesaError::InvalidDesktopValue("target has no parent directory".into())
-    })?;
+    let target_dir = canonical_target
+        .parent()
+        .ok_or_else(|| KalesaError::InvalidDesktopValue("target has no parent directory".into()))?;
 
     let binary_type = detect::detect(&canonical_target)?;
     let target = GameTarget::new(canonical_target.clone(), binary_type);
@@ -205,10 +205,7 @@ mod tests {
         let target_dir = Path::new("/games/ChildofLight");
         let workdir = WorkDir::new(target_dir);
 
-        assert_eq!(
-            workdir.root,
-            PathBuf::from("/games/ChildofLight/.workdir")
-        );
+        assert_eq!(workdir.root, PathBuf::from("/games/ChildofLight/.workdir"));
         assert_eq!(
             workdir.config,
             PathBuf::from("/games/ChildofLight/.workdir/config")
