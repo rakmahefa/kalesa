@@ -1,22 +1,14 @@
 use std::path::{Path, PathBuf};
 
-use crate::domain::{BinaryType, LaunchOptions, Runner, RunnerKind};
+use crate::domain::BinaryType;
 use crate::error::{KalesaError, Result};
 
 pub fn write_launch_script(
     path: &Path,
-    executable_path: &Path,
-    binary_type: BinaryType,
-    wine_prefix: Option<&Path>,
+    _executable_path: &Path,
+    _binary_type: BinaryType,
+    _wine_prefix: Option<&Path>,
 ) -> Result<()> {
-    let _target = executable_path;
-    let _runner = Runner {
-        kind: RunnerKind::for_binary(binary_type),
-        wine_prefix: wine_prefix.map(Path::to_path_buf),
-        proton_path: None,
-    };
-    let _launch = LaunchOptions::default();
-
     let config_path = infer_config_path(path).ok_or_else(|| {
         KalesaError::InvalidDesktopValue(
             "cannot infer .workdir/config/config.yaml from launcher path".into(),
