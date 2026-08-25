@@ -10,7 +10,7 @@ pub fn write(path: &Path, config_path: &Path) -> Result<()> {
     let config_path = config_path
         .to_str()
         .ok_or_else(|| KalesaError::InvalidDesktopValue("config path is not valid UTF-8".into()))?;
-    let config_path = shell_quote(config_path);
+    let config_assignment = config_assignment(config_path);
 
     let content = format!(
         r#"#!/bin/bash
@@ -22,7 +22,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${{BASH_SOURCE[0]}}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
 GAME_DIR="$(dirname "$BASE_DIR")"
-CONFIG_FILE="$GAME_DIR/{config_path}"
+{config_assignment}
 YQ_BIN="${{KALESA_YQ:-yq}}"
 
 fail() {{
@@ -120,7 +120,7 @@ case "$RUNNER" in
 esac
 "#,
         launcher_version = LAUNCHER_FORMAT_VERSION,
-        config_path = config_path,
+        config_assignment = config_assignment,
     );
 
     let mut file = File::create(path).map_err(|e| KalesaError::io("creating launch script", e))?;
@@ -137,8 +137,25 @@ esac
     Ok(())
 }
 
+fn config_assignment(config_path: &str) -> String {
+    let path = Path::new(config_path);
+    if path.is_absolute() {
+        format!("CONFIG_FILE={}", shell_quote(config_path))
+    } else {
+        format!("CONFIG_FILE=\"$GAME_DIR/{}\"", shell_double_quote(config_path))
+    }
+}
+
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn shell_double_quote(value: &str) -> String {
+    value
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('$', "\\$")
+        .replace('`', "\\`")
 }
 
 #[cfg(test)]
@@ -152,13 +169,14 @@ mod tests {
         let root = temp_path("kalesa_launcher_v2");
         fs::create_dir_all(root.join("bin")).unwrap();
         let path = root.join("bin/launch.sh");
-        let config = root.join("config/config.yaml");
+        let config = PathBuf::from(".workdir/config/config.yaml");
 
         write(&path, &config).unwrap();
         let content = fs::read_to_string(&path).unwrap();
 
         assert!(content.contains("Kalesa launcher format: 2"));
         assert!(content.contains("Kalesa config schema: 2"));
+        assert!(content.contains("CONFIG_FILE=\"$GAME_DIR/.workdir/config/config.yaml\""));
         assert!(content.contains(".schema_version // 0"));
         assert!(content.contains(".runner.type // \"\""));
         assert!(content.contains(".executable.path // \"\""));
@@ -168,16 +186,33 @@ mod tests {
     }
 
     #[test]
-    fn quotes_config_path() {
-        let root = temp_path("kalesa launcher config 'path");
+    fn quotes_relative_config_path() {
+        let root = temp_path("kalesa_launcher_config_quote");
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("launch.sh");
+        let config = PathBuf::from(".workdir/config/game 'file.yaml");
+
+        write(&path, &config).unwrap();
+        let content = fs::read_to_string(&path).unwrap();
+
+        assert!(content.contains(
+            "CONFIG_FILE=\"$GAME_DIR/.workdir/config/game \\\'file.yaml\""
+        ));
+    }
+
+    #[test]
+    fn quotes_absolute_config_path() {
+        let root = temp_path("kalesa_launcher_absolute_quote");
         fs::create_dir_all(&root).unwrap();
         let path = root.join("launch.sh");
         let config = root.join("config 'file.yaml");
 
         write(&path, &config).unwrap();
         let content = fs::read_to_string(&path).unwrap();
+        let expected = format!("CONFIG_FILE={}
+", shell_quote(config.to_str().unwrap()));
 
-        assert!(content.contains("CONFIG_FILE=\"$GAME_DIR/'config '\\\''file.yaml'\""));
+        assert!(content.contains(expected.trim_end()));
     }
 
     fn temp_path(name: &str) -> PathBuf {
