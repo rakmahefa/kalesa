@@ -92,7 +92,7 @@ yaml_nested_scalar() {{
             if (value ~ /^\x27.*\x27$/) return substr(value, 2, length(value) - 2)
             if (value ~ /^\".*\"$/) return substr(value, 2, length(value) - 2)
             return value
-        }
+        }}
         /^[^[:space:]][^:]*:/ {{
             current_root = clean_key($0)
             in_root = (current_root == root)
