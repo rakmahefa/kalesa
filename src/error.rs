@@ -38,6 +38,19 @@ pub enum KalesaError {
     #[error("invalid Desktop Entry value: {0}")]
     InvalidDesktopValue(String),
 
+    #[error("invalid runtime launcher configuration: {0}")]
+    InvalidRuntimeConfig(String),
+
+    #[error("failed to execute launcher command '{command}': {source}")]
+    CommandIo {
+        command: String,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("launcher command '{command}' exited with status {code:?}")]
+    CommandFailed { command: String, code: Option<i32> },
+
     #[error("failed to serialize configuration: {0}")]
     ConfigSerialize(#[from] serde_yaml::Error),
 }
