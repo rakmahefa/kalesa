@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::domain::{GameMetadata, GameTarget, LaunchOptions, Runner};
 use crate::error::{KalesaError, Result};
 
-pub const CONFIG_SCHEMA_VERSION: u32 = 2;
+pub const CONFIG_SCHEMA_VERSION: u32 = 3;
 
 #[derive(Serialize)]
 struct WineConfig {
@@ -48,13 +48,8 @@ struct ExecutableConfig {
 #[derive(Serialize)]
 struct LaunchConfig {
     args: Vec<String>,
-    env: Vec<EnvConfig>,
-}
-
-#[derive(Serialize)]
-struct EnvConfig {
-    key: String,
-    value: String,
+    env: std::collections::BTreeMap<String, String>,
+    wrappers: Vec<String>,
 }
 
 pub fn write(
@@ -92,14 +87,8 @@ pub fn write(
         },
         launch: LaunchConfig {
             args: launch.args.clone(),
-            env: launch
-                .env
-                .iter()
-                .map(|(key, value)| EnvConfig {
-                    key: key.clone(),
-                    value: value.clone(),
-                })
-                .collect(),
+            env: launch.env.clone(),
+            wrappers: launch.wrappers.clone(),
         },
     };
 
