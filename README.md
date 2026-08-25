@@ -1,105 +1,100 @@
 # kalesa
 
-Outil en ligne de commande qui prépare un dossier de jeu pour un lancement
-standardisé : validation du type de binaire (Windows PE / Linux ELF),
-extraction de l'icône, génération d'une config YAML, d'un script de
-lancement et d'entrées `.desktop` (freedesktop).
+Outil en ligne de commande qui prépare un dossier de jeu pour un lancement standardisé : validation du type de binaire (Windows PE / Linux ELF / AppImage), collecte de métadonnées, découverte d'icône, génération d'une config YAML, d'un script de lancement et d'entrées `.desktop` (freedesktop).
 
 ## Prérequis
 
-- **Rust >= 1.85** (le projet utilise `edition = "2024"`). Le fichier
-  `rust-toolchain.toml` fixe ce numéro : avec `rustup` installé, `cargo
-  build` récupérera automatiquement le bon compilateur.
-- **`wine`** installé et dans le `PATH` si vous comptez lancer des jeux
-  Windows (`launch.sh` généré appelle `wine` pour les cibles PE).
+- **Rust >= 1.85** (le projet utilise `edition = "2024"`). Le fichier `rust-toolchain.toml` fixe ce numéro.
+- **`wine`** dans le `PATH` pour utiliser le backend Wine.
+- Un exécutable Proton peut être fourni avec `--proton-path` pour le backend Proton.
 
 ## Usage
 
 ```bash
-kalesa <target> [--name <nom>] [--force] [--verbose]
+kalesa <target> [options]
 ```
 
-- `target` : chemin vers l'exécutable du jeu (`.exe` Windows ou binaire
-  Linux). Le fichier doit être un PE ou un ELF valide.
-- `--name` / `-n` : nom affiché (par défaut, dérivé du nom de fichier).
-- `--force` / `-f` : écrase `game.desktop` et `.directory` s'ils existent
-  déjà. Sans ce flag, un fichier déjà présent est laissé intact (avertissement
-  loggé) pour ne pas écraser une personnalisation manuelle.
-- `--verbose` / `-v` : passe les logs en niveau `debug`. Le niveau peut aussi
-  être contrôlé via la variable d'environnement `RUST_LOG`.
+### Cible
 
-À l'exécution, l'outil crée :
+`target` est un exécutable PE Windows, un binaire ELF Linux ou une AppImage (`*.AppImage`). Kalesa valide l'en-tête ELF/PE avant de générer les artefacts.
 
+### Métadonnées
+
+```text
+--name NAME              Nom affiché
+--developer NAME         Développeur/studio
+--version VERSION        Version du jeu
+--description TEXT       Description courte
+--category CATEGORY      Catégorie freedesktop, répétable
+--icon PATH              Icône explicite
 ```
+
+Pour les cibles Linux/AppImage, Kalesa inspecte les fichiers `.desktop` voisins, puis cherche les icônes dans les chemins XDG (`XDG_DATA_HOME`, `XDG_DATA_DIRS`, thèmes hicolor et pixmaps), avant de revenir aux noms conventionnels voisins.
+
+Les fichiers `.desktop` AppImage suivent notamment les clés `X-AppImage-Name` et `X-AppImage-Version` lorsqu'elles sont présentes. citehttps://docs.appimage.org/reference/desktop-integration.html
+
+### Runner
+
+```text
+--runner auto|native|wine|proton
+--wine-prefix PATH       Préfixe Wine/Proton
+--proton-path PATH       Exécutable Proton
+```
+
+`auto` choisit Native pour Linux/AppImage et Wine pour PE. Proton reste explicite afin d'éviter de modifier silencieusement le comportement d'une installation existante.
+
+### Arguments et environnement
+
+```text
+--arg VALUE              Argument à intégrer au launcher, répétable
+--env KEY=VALUE           Variable d'environnement, répétable
+```
+
+Les valeurs sont shell-quotées et les noms de variables sont validés avant génération.
+
+### Génération
+
+Kalesa crée :
+
+```text
 .workdir/
-  config/config.yaml   # runner (native/wine), chemin de l'exécutable
-  bin/launch.sh         # script de lancement exécutable
-  icons/game_icon.*      # icône extraite (PNG pour Windows, format d'origine pour Linux)
-game.desktop            # entrée freedesktop
+  config/config.yaml
+  bin/launch.sh
+  icons/game_icon.*
+game.desktop
 .directory
 ```
 
+Le schéma YAML est versionné (`schema_version: 2`) et contient le runner sélectionné, les métadonnées du jeu et les options de lancement.
+
 ## Détection du binaire
 
-Le type de binaire est validé à partir de son en-tête :
+- `\x7fELF` → Linux ; validation minimale de l'en-tête ELF.
+- un ELF dont le chemin se termine par `.AppImage` → AppImage ; le fichier reste exécuté directement par le runtime AppImage.
+- `MZ` → PE ; `e_lfanew` puis `PE\0\0` sont obligatoirement présents.
+- tout format inconnu ou tronqué est rejeté.
 
-- `\x7fELF` → Linux, avec validation minimale de l'en-tête ELF (classe,
-  endianess et version).
-- `MZ` → le champ DOS `e_lfanew` est lu puis la signature `PE\0\0` et le
-  début de l'en-tête COFF sont obligatoirement présents à cet offset.
-- Un fichier inconnu ou un en-tête ELF/PE tronqué ou invalide est rejeté avec
-  une erreur typée ; Kalesa ne traite plus un `MZ` invalide comme un exécutable
-  Windows et ne transforme plus un format inconnu en cible Linux.
+Le type 2 d'AppImage est conçu comme un exécutable ELF dont le runtime monte ensuite son système de fichiers SquashFS et lance `AppRun`. citehttps://docs.appimage.org/reference/architecture.html
 
-## Extraction d'icône
+## Sécurité des launchers
 
-- **Windows (PE)** : l'icône est reconstruite en un fichier `.ico` complet et
-  valide via `pelite`, puis décodée avec le décodeur ICO du crate `image`
-  (qui gère correctement les entrées BMP "headerless" ainsi que les entrées
-  PNG, et choisit automatiquement la plus grande résolution disponible), puis
-  sauvegardée en PNG.
-- **Linux (ELF)** : les ressources PE ne s'appliquent pas aux binaires ELF.
-  L'outil cherche, à titre "best effort", un fichier d'icône au nom
-  conventionnel à côté de l'exécutable (`icon.png`, `icon.svg`, `icon.xpm`,
-  `<nom_du_binaire>.png`, `<nom_du_binaire>.svg`) et le copie s'il le trouve.
-- Si aucune icône n'a pu être obtenue, l'icône de thème générique
-  `applications-games` est utilisée en repli.
-
-## Lancement du jeu
-
-`launch.sh` :
-
-- pour une cible Windows, exporte `WINEPREFIX`/`WINEARCH` (préfixe dédié
-  sous `.workdir/wine`) et exécute le chemin absolu de la cible via `wine` ;
-  les chemins sont shell-quotés pour résister aux espaces, apostrophes et
-  autres métacaractères ; si `wine` n'est pas trouvé dans le `PATH`, le script
-  échoue immédiatement avec un message explicite ;
-- pour une cible Linux, rend le binaire exécutable si besoin puis exécute son
-  chemin absolu avec les mêmes garanties d'escaping.
-
-Les entrées `.desktop` utilisent également un escaping dédié pour le champ
-`Exec=` et les valeurs textuelles. Les noms ou chemins contenant un retour à
-la ligne sont rejetés car ils ne peuvent pas être représentés sans ambiguïté
-dans ce format.
+- chemins et arguments sont shell-quotés ;
+- les variables d'environnement utilisent uniquement des noms valides ;
+- les entrées `.desktop` rejettent les retours à la ligne ;
+- un runner Wine/Proton explicitement demandé sur une cible non Windows est rejeté.
 
 ## Tests
 
 ```bash
-cargo test
+cargo fmt --all -- --check
+cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
+cargo build --workspace --release
 ```
 
-Couvre notamment : validation ELF/PE stricte, rejet d'un `MZ` sans vraie
-signature PE, rejet des formats inconnus, extraction d'icône sur une entrée
-invalide, recherche d'icône Linux, génération de la config YAML, génération
-sécurisée du script Wine/exécution directe, escaping des caractères spéciaux,
-rejet des nouvelles lignes dans les Desktop Entries et non-écrasement des
-fichiers `.desktop` sans `--force`.
+La CI GitHub exécute ces quatre contrôles.
 
 ## Limites connues / pistes futures
 
-- Aucune extraction d'icône n'est tentée depuis un AppImage (nécessiterait
-  de monter/décompresser l'image squashfs).
-- Le préfixe Wine n'est pas initialisé automatiquement (`wineboot`) au
-  premier lancement ; c'est wine qui s'en charge à la volée au premier
-  `wine <jeu>`, mais un `wineboot --init` explicite avant le premier
-  lancement pourrait être ajouté pour un contrôle plus fin.
+- L'extraction de ressources internes d'une AppImage n'est pas exécutée automatiquement : Kalesa privilégie les métadonnées `.desktop`, les icônes XDG et les icônes voisines afin de ne pas exécuter/monter une image potentiellement non fiable.
+- Les tests d'intégration du pipeline complet et les fixtures PE/ELF réels restent à ajouter.
