@@ -170,27 +170,35 @@ exec "${{COMMAND[@]}}"
 
 fn runner_setup(kind: RunnerKind) -> &'static str {
     match kind {
-        RunnerKind::Native => r#"if [[ ! -x "$TARGET" ]]; then
+        RunnerKind::Native => {
+            r#"if [[ ! -x "$TARGET" ]]; then
     chmod +x "$TARGET" 2>/dev/null || true
 fi
-[[ -x "$TARGET" ]] || fail "game executable is not executable: $TARGET""#,
-        RunnerKind::Wine => r#"require_command wine
+[[ -x "$TARGET" ]] || fail "game executable is not executable: $TARGET""#
+        }
+        RunnerKind::Wine => {
+            r#"require_command wine
 [[ -n "$WINE_PREFIX_VALUE" ]] || fail "runner.wine.prefix is missing"
 export WINEPREFIX="$(resolve_path "$WINE_PREFIX_VALUE")"
-export WINEARCH="win64""#,
-        RunnerKind::Proton => r#"[[ -n "$PROTON_PATH_VALUE" ]] || fail "runner.proton.path is missing"
+export WINEARCH="win64""#
+        }
+        RunnerKind::Proton => {
+            r#"[[ -n "$PROTON_PATH_VALUE" ]] || fail "runner.proton.path is missing"
 [[ -n "$WINE_PREFIX_VALUE" ]] || fail "runner.wine.prefix is missing"
 PROTON="$(resolve_path "$PROTON_PATH_VALUE")"
 export WINEPREFIX="$(resolve_path "$WINE_PREFIX_VALUE")"
-[[ -x "$PROTON" ]] || fail "Proton executable not found or not executable: $PROTON""#,
+[[ -x "$PROTON" ]] || fail "Proton executable not found or not executable: $PROTON""#
+        }
     }
 }
 
 fn runner_command(kind: RunnerKind) -> &'static str {
     match kind {
         RunnerKind::Native => r#"COMMAND+=("$TARGET")"#,
-        RunnerKind::Wine => r#"require_command wine
-COMMAND+=("wine" "$TARGET")"#,
+        RunnerKind::Wine => {
+            r#"require_command wine
+COMMAND+=("wine" "$TARGET")"#
+        }
         RunnerKind::Proton => r#"COMMAND+=("$PROTON" "run" "$TARGET")"#,
     }
 }
@@ -238,7 +246,9 @@ fn shell_double_quote(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner, RunnerBackend};
+    use crate::domain::{
+        BinaryType, GameMetadata, GameTarget, LaunchOptions, Runner, RunnerBackend,
+    };
     use std::collections::BTreeMap;
     use std::fs;
     use std::path::PathBuf;
