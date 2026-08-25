@@ -1,0 +1,24 @@
+schema_version: 3
+name: ChildofLight
+version: null
+developer: null
+description: null
+categories: []
+runner:
+  type: wine
+  wine:
+    prefix: /home/neko/Games/pfx/ChildofLight
+    arch: win64
+  proton: null
+executable:
+  path: ChildofLight.exe
+launch:
+  args:
+    - -fullscreen
+    - --language=fr
+  env:
+    DXVK_FRAME_RATE: 30
+    WINEDEBUG: -all
+  wrappers:
+    - gamemoderun
+    - mangohud
