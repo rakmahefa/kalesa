@@ -34,8 +34,7 @@ pub fn write(
         CONFIG_SCHEMA_VERSION,
     )?;
 
-    let mut file =
-        File::create(path).map_err(|e| KalesaError::io("creating launch script", e))?;
+    let mut file = File::create(path).map_err(|e| KalesaError::io("creating launch script", e))?;
     file.write_all(rendered.content.as_bytes())
         .map_err(|e| KalesaError::io("writing launch script", e))?;
 
@@ -49,11 +48,7 @@ pub fn write(
     Ok(())
 }
 
-fn validate_inputs(
-    target: &GameTarget,
-    metadata: &GameMetadata,
-    runner: &Runner,
-) -> Result<()> {
+fn validate_inputs(target: &GameTarget, metadata: &GameMetadata, runner: &Runner) -> Result<()> {
     if metadata.name.trim().is_empty() {
         return Err(KalesaError::InvalidDesktopValue(
             "game name cannot be empty".into(),
