@@ -1,8 +1,3 @@
-use std::path::Path;
-
-use crate::error::Result;
-use crate::pipeline::detect;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryType {
     LinuxElf,
@@ -19,9 +14,5 @@ impl BinaryType {
 
     pub fn is_windows(self) -> bool {
         matches!(self, Self::WindowsPe)
-    }
-
-    pub fn detect(path: &Path) -> Result<Self> {
-        detect::detect(path)
     }
 }
