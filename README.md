@@ -8,7 +8,7 @@ Outil en ligne de commande qui prépare un dossier de jeu pour un lancement stan
 - **`wine`** dans le `PATH` lorsque le runner Wine est utilisé.
 - Un exécutable Proton peut être fourni avec `--proton-path` lorsque le runner Proton est utilisé.
 
-Le `launch.sh` généré n’a plus de dépendance à `yq` : les valeurs du runtime sont matérialisées directement depuis le même modèle Rust que le YAML au moment de la génération.
+Le `launch.sh` généré ne parse pas lui-même le YAML et n’a pas de dépendance à `yq`. Il délègue le chargement du manifest au même binaire Kalesa, qui utilise `serde_yaml` pour le runtime.
 
 ## Usage
 
@@ -81,18 +81,18 @@ categories: []
 runner:
   type: wine
   wine:
-    prefix: /path/to/.workdir/wine
+    prefix: /home/user/Games/pfx/ChildofLight
     arch: win64
   proton: null
 executable:
-  path: /path/to/ChildofLight.exe
+  path: ChildofLight.exe
 launch:
   args:
     - -fullscreen
     - --language=fr
   env:
     WINEDEBUG: -all
-    DXVK_LOG_LEVEL: none
+    DXVK_FRAME_RATE: 30
   wrappers:
     - gamemoderun
     - mangohud
@@ -100,30 +100,29 @@ launch:
 
 Le schéma v3 conserve `args` comme une liste YAML native et transforme `env` en mapping `KEY: VALUE`. `wrappers` est une liste ordonnée appliquée avant le runner sélectionné.
 
-### Migration v1 → v2 → v3
+Les chemins relatifs de `executable.path`, `runner.wine.prefix` et `runner.proton.path` sont résolus par rapport au dossier du jeu.
 
-Kalesa a évolué d’un ancien schéma v1 vers v2 puis v3. Une configuration existante n’est pas réécrite automatiquement : relancer Kalesa sur la cible reste le chemin recommandé pour régénérer les artefacts selon le format actuel.
+## Launcher runtime
 
-## Launcher runtime v3
+Le `launch.sh` généré est volontairement mince : il localise `.workdir/config/config.yaml`, puis délègue l’exécution au binaire Kalesa avec `--launch-config`.
 
-Le `launch.sh` généré est un runtime Bash strict. Il ne parse pas le YAML au lancement et ne dépend donc pas de `yq`. Les valeurs sont générées depuis le même modèle Rust que `config.yaml` afin d’éviter une divergence de parsing entre générateur et runtime.
+Le runtime Rust :
 
-Le launcher v3 :
+- désérialise directement `config.yaml` avec `serde_yaml` ;
+- exige `schema_version: 3` ;
+- charge réellement `name`, `runner`, `executable`, `args`, `env`, `wrappers`, Wine prefix/arch et Proton path depuis le YAML ;
+- résout les chemins relatifs par rapport au dossier du jeu ;
+- vérifie le type réel du binaire avant de lancer Wine/Proton ;
+- vérifie les wrappers et dépendances dans `PATH` ;
+- applique l’environnement avant l’exécution du runner ;
+- conserve séparément les arguments du YAML et les arguments ajoutés à `launch.sh` ;
+- construit la commande avec `std::process::Command`, sans `eval`, sans `sh -c` et sans parsing YAML en shell ;
+- préserve le code de retour du jeu.
 
-- vérifie la présence du fichier de configuration et utilise explicitement le schema v3 ;
-- résout les chemins absolus et relatifs au dossier du jeu ;
-- représente les arguments et wrappers comme des tableaux Bash ;
-- applique les variables d’environnement sous forme de valeurs shell-quotées ;
-- vérifie les dépendances du runner et des wrappers ;
-- construit la commande complète sans `eval` et sans `sh -c` ;
-- affiche la commande finale avec `echo` avant l’exécution ;
-- conserve les arguments ajoutés directement à `launch.sh` après ceux de la configuration ;
-- utilise `exec` afin de préserver le code de retour du jeu.
-
-Le format du launcher est identifié dans le script généré par :
+Le script généré porte le marqueur :
 
 ```bash
-# Kalesa launcher format: 3
+# Kalesa launcher format: 4
 # Kalesa config schema: 3
 ```
 
@@ -134,6 +133,7 @@ Kalesa crée :
 ```text
 .workdir/
   config/config.yaml
+  config/config.yaml.example
   bin/launch.sh
   icons/game_icon.*
 game.desktop
@@ -149,13 +149,12 @@ game.desktop
 
 ## Sécurité des launchers
 
-- le YAML est validé par Kalesa avant génération ;
-- les arguments et variables d’environnement sont shell-quotés lors de la génération du runtime ;
+- le YAML est désérialisé et validé dans Rust avant l’exécution ;
 - les variables d’environnement utilisent uniquement des noms valides ;
 - les chemins relatifs sont résolus par rapport au dossier du jeu ;
 - les entrées `.desktop` rejettent les retours à la ligne ;
 - un runner Wine/Proton explicitement demandé sur une cible non Windows est rejeté ;
-- le launcher n’utilise ni `eval` ni `sh -c` pour construire la commande.
+- le runtime n’utilise ni `eval` ni `sh -c` pour construire la commande.
 
 ## Tests
 
@@ -170,7 +169,7 @@ La CI GitHub exécute ces quatre contrôles.
 
 ## Limites connues / pistes futures
 
-- Le launcher v3 embarque les valeurs issues du YAML au moment de la génération ; modifier manuellement `config.yaml` sans régénérer `launch.sh` ne modifie donc pas le runtime embarqué.
+- La détection AppImage reste basée sur ELF + extension `.AppImage`.
 - L’extraction de ressources internes d’une AppImage n’est pas exécutée automatiquement : Kalesa privilégie les métadonnées `.desktop`, les icônes XDG et les icônes voisines afin de ne pas exécuter/monter une image potentiellement non fiable.
 - Les tests d’intégration du pipeline complet et les fixtures PE/ELF réels restent à renforcer.
 - La migration automatique de configurations v1/v2 vers v3 n’est pas encore fournie ; la régénération avec Kalesa reste le chemin recommandé.
