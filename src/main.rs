@@ -6,8 +6,15 @@ use std::path::PathBuf;
 #[command(author, version, about = "Game directory and launcher initializer", long_about = None)]
 struct Args {
     /// Path to target executable (.exe, Linux binary or .AppImage)
-    #[arg(required = true)]
-    target: PathBuf,
+    target: Option<PathBuf>,
+
+    /// Launch from a schema-v3 YAML manifest instead of initializing a game.
+    #[arg(long, value_name = "PATH", conflicts_with = "target")]
+    launch_config: Option<PathBuf>,
+
+    /// Arguments appended to launch.args when using --launch-config.
+    #[arg(last = true, allow_hyphen_values = true)]
+    launch_args: Vec<String>,
 
     /// Display name of the game
     #[arg(short, long)]
@@ -87,6 +94,16 @@ fn main() -> kalesa::error::Result<()> {
         .format_timestamp(None)
         .init();
 
+    if let Some(config_path) = args.launch_config {
+        return kalesa::run_from_config(&config_path, &args.launch_args);
+    }
+
+    let target = args.target.ok_or_else(|| {
+        kalesa::error::KalesaError::InvalidRuntimeConfig(
+            "target is required unless --launch-config is provided".into(),
+        )
+    })?;
+
     let setup_options = kalesa::pipeline::SetupOptions {
         name: args.name,
         developer: args.developer,
@@ -105,6 +122,6 @@ fn main() -> kalesa::error::Result<()> {
         force: args.force,
     };
 
-    kalesa::run_setup_with_options(&args.target, setup_options)?;
+    kalesa::run_setup_with_options(&target, setup_options)?;
     Ok(())
 }
