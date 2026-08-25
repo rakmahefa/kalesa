@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -8,48 +8,48 @@ use crate::error::{KalesaError, Result};
 
 pub const CONFIG_SCHEMA_VERSION: u32 = 3;
 
-#[derive(Serialize)]
-struct WineConfig {
-    prefix: PathBuf,
-    arch: String,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct WineConfig {
+    pub prefix: PathBuf,
+    pub arch: String,
 }
 
-#[derive(Serialize)]
-struct ProtonConfig {
-    path: PathBuf,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ProtonConfig {
+    pub path: PathBuf,
 }
 
-#[derive(Serialize)]
-struct RunnerConfig {
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RunnerConfig {
     #[serde(rename = "type")]
-    runner_type: String,
-    wine: Option<WineConfig>,
-    proton: Option<ProtonConfig>,
+    pub runner_type: String,
+    pub wine: Option<WineConfig>,
+    pub proton: Option<ProtonConfig>,
 }
 
-#[derive(Serialize)]
-struct AppConfig {
-    schema_version: u32,
-    name: String,
-    version: Option<String>,
-    developer: Option<String>,
-    description: Option<String>,
-    categories: Vec<String>,
-    runner: RunnerConfig,
-    executable: ExecutableConfig,
-    launch: LaunchConfig,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AppConfig {
+    pub schema_version: u32,
+    pub name: String,
+    pub version: Option<String>,
+    pub developer: Option<String>,
+    pub description: Option<String>,
+    pub categories: Vec<String>,
+    pub runner: RunnerConfig,
+    pub executable: ExecutableConfig,
+    pub launch: LaunchConfig,
 }
 
-#[derive(Serialize)]
-struct ExecutableConfig {
-    path: PathBuf,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ExecutableConfig {
+    pub path: PathBuf,
 }
 
-#[derive(Serialize)]
-struct LaunchConfig {
-    args: Vec<String>,
-    env: std::collections::BTreeMap<String, String>,
-    wrappers: Vec<String>,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LaunchConfig {
+    pub args: Vec<String>,
+    pub env: std::collections::BTreeMap<String, String>,
+    pub wrappers: Vec<String>,
 }
 
 pub fn write(
