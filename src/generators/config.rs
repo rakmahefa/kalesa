@@ -104,8 +104,7 @@ pub fn write(
     };
 
     let yaml = serde_yaml::to_string(&app_config)?;
-    let mut file =
-        File::create(path).map_err(|e| KalesaError::io("creating configuration", e))?;
+    let mut file = File::create(path).map_err(|e| KalesaError::io("creating configuration", e))?;
     file.write_all(yaml.as_bytes())
         .map_err(|e| KalesaError::io("writing configuration", e))?;
     Ok(())
