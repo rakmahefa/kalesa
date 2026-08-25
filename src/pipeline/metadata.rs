@@ -2,7 +2,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::domain::{BinaryType, GameMetadata, GameTarget};
+use crate::domain::{GameMetadata, GameTarget};
 
 pub fn collect(target: &GameTarget, custom_name: Option<&str>) -> GameMetadata {
     let mut metadata = GameMetadata::new(
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn derives_default_name() {
         let dir = temp_dir("name");
-        let target = GameTarget::new(dir.join("mygame"), BinaryType::LinuxElf);
+        let target = GameTarget::new(dir.join("mygame"), crate::domain::BinaryType::LinuxElf);
         assert_eq!(collect(&target, None).name, "mygame");
         let _ = fs::remove_dir_all(&dir);
     }
@@ -224,7 +224,7 @@ mod tests {
             "[Desktop Entry]\nName=My Game\nIcon=mygame\nX-AppImage-Version=2.1\nComment=Great game\nCategories=Game;Emulator;\n",
         )
         .unwrap();
-        let target = GameTarget::new(dir.join("mygame"), BinaryType::LinuxElf);
+        let target = GameTarget::new(dir.join("mygame"), crate::domain::BinaryType::LinuxElf);
         let metadata = collect(&target, None);
         assert_eq!(metadata.name, "My Game");
         assert_eq!(metadata.version.as_deref(), Some("2.1"));
@@ -240,7 +240,7 @@ mod tests {
         fs::write(&target_path, b"fake").unwrap();
         let icon = dir.join("icon.png");
         fs::write(&icon, b"fake png").unwrap();
-        let target = GameTarget::new(target_path, BinaryType::LinuxElf);
+        let target = GameTarget::new(target_path, crate::domain::BinaryType::LinuxElf);
         assert_eq!(find_linux_icon(&target.path), Some(icon));
         let _ = fs::remove_dir_all(&dir);
     }
