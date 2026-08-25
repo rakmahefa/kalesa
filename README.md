@@ -1,7 +1,7 @@
 # kalesa
 
 Outil en ligne de commande qui prépare un dossier de jeu pour un lancement
-standardisé : détection du type de binaire (Windows PE / Linux ELF),
+standardisé : validation du type de binaire (Windows PE / Linux ELF),
 extraction de l'icône, génération d'une config YAML, d'un script de
 lancement et d'entrées `.desktop` (freedesktop).
 
@@ -20,7 +20,7 @@ kalesa <target> [--name <nom>] [--force] [--verbose]
 ```
 
 - `target` : chemin vers l'exécutable du jeu (`.exe` Windows ou binaire
-  Linux).
+  Linux). Le fichier doit être un PE ou un ELF valide.
 - `--name` / `-n` : nom affiché (par défaut, dérivé du nom de fichier).
 - `--force` / `-f` : écrase `game.desktop` et `.directory` s'ils existent
   déjà. Sans ce flag, un fichier déjà présent est laissé intact (avertissement
@@ -41,14 +41,15 @@ game.desktop            # entrée freedesktop
 
 ## Détection du binaire
 
-Le type de binaire est déterminé en lisant les premiers octets du fichier :
+Le type de binaire est validé à partir de son en-tête :
 
-- `\x7fELF` → Linux.
-- `MZ` → on va plus loin : on lit `e_lfanew` dans l'en-tête DOS puis on
-  vérifie la présence de la signature `PE\0\0` à cet offset, pour distinguer
-  un vrai PE d'un simple exécutable DOS qui commence aussi par `MZ`. Si la
-  signature ne peut pas être confirmée, le fichier est quand même traité
-  comme "windows" (comportement conservé), mais un avertissement est loggé.
+- `\x7fELF` → Linux, avec validation minimale de l'en-tête ELF (classe,
+  endianess et version).
+- `MZ` → le champ DOS `e_lfanew` est lu puis la signature `PE\0\0` et le
+  début de l'en-tête COFF sont obligatoirement présents à cet offset.
+- Un fichier inconnu ou un en-tête ELF/PE tronqué ou invalide est rejeté avec
+  une erreur typée ; Kalesa ne traite plus un `MZ` invalide comme un exécutable
+  Windows et ne transforme plus un format inconnu en cible Linux.
 
 ## Extraction d'icône
 
@@ -69,11 +70,17 @@ Le type de binaire est déterminé en lisant les premiers octets du fichier :
 `launch.sh` :
 
 - pour une cible Windows, exporte `WINEPREFIX`/`WINEARCH` (préfixe dédié
-  sous `.workdir/wine`) et exécute `wine <jeu>` ; si `wine` n'est pas
-  trouvé dans le `PATH`, le script échoue immédiatement avec un message
-  explicite plutôt que de ne rien faire ;
-- pour une cible Linux, rend le binaire exécutable si besoin puis l'exécute
-  directement.
+  sous `.workdir/wine`) et exécute le chemin absolu de la cible via `wine` ;
+  les chemins sont shell-quotés pour résister aux espaces, apostrophes et
+  autres métacaractères ; si `wine` n'est pas trouvé dans le `PATH`, le script
+  échoue immédiatement avec un message explicite ;
+- pour une cible Linux, rend le binaire exécutable si besoin puis exécute son
+  chemin absolu avec les mêmes garanties d'escaping.
+
+Les entrées `.desktop` utilisent également un escaping dédié pour le champ
+`Exec=` et les valeurs textuelles. Les noms ou chemins contenant un retour à
+la ligne sont rejetés car ils ne peuvent pas être représentés sans ambiguïté
+dans ce format.
 
 ## Tests
 
@@ -81,12 +88,12 @@ Le type de binaire est déterminé en lisant les premiers octets du fichier :
 cargo test
 ```
 
-Couvre notamment : détection ELF/PE (y compris le cas "MZ sans vraie
-signature PE"), échec propre de l'extraction d'icône sur une entrée
-invalide, recherche d'icône Linux, génération de la config YAML
-(Windows avec section `wine`, Linux sans), génération du script de
-lancement (variante Wine / variante exécution directe), et non-écrasement
-des fichiers `.desktop` sans `--force`.
+Couvre notamment : validation ELF/PE stricte, rejet d'un `MZ` sans vraie
+signature PE, rejet des formats inconnus, extraction d'icône sur une entrée
+invalide, recherche d'icône Linux, génération de la config YAML, génération
+sécurisée du script Wine/exécution directe, escaping des caractères spéciaux,
+rejet des nouvelles lignes dans les Desktop Entries et non-écrasement des
+fichiers `.desktop` sans `--force`.
 
 ## Limites connues / pistes futures
 
