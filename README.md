@@ -5,9 +5,10 @@ Outil en ligne de commande qui prépare un dossier de jeu pour un lancement stan
 ## Prérequis
 
 - **Rust >= 1.85** (le projet utilise `edition = "2024"`). Le fichier `rust-toolchain.toml` fixe ce numéro.
-- **`yq` v4** dans le `PATH` pour exécuter le `launch.sh` généré. `KALESA_YQ` peut être utilisé pour fournir un chemin personnalisé vers `yq`.
 - **`wine`** dans le `PATH` lorsque le runner Wine est utilisé.
 - Un exécutable Proton peut être fourni avec `--proton-path` lorsque le runner Proton est utilisé.
+
+Le `launch.sh` généré n’a plus de dépendance à `yq` : les valeurs du runtime sont matérialisées directement depuis le même modèle Rust que le YAML au moment de la génération.
 
 ## Usage
 
@@ -32,8 +33,6 @@ kalesa <target> [options]
 
 Pour les cibles Linux/AppImage, Kalesa inspecte les fichiers `.desktop` voisins, puis cherche les icônes dans les chemins XDG (`XDG_DATA_HOME`, `XDG_DATA_DIRS`, thèmes hicolor et pixmaps), avant de revenir aux noms conventionnels voisins.
 
-Les fichiers `.desktop` AppImage suivent notamment les clés `X-AppImage-Name` et `X-AppImage-Version` lorsqu’elles sont présentes. citehttps://docs.appimage.org/reference/desktop-integration.html
-
 ### Runner
 
 ```text
@@ -44,23 +43,36 @@ Les fichiers `.desktop` AppImage suivent notamment les clés `X-AppImage-Name` e
 
 `auto` choisit Native pour Linux/AppImage et Wine pour PE. Proton reste explicite afin d’éviter de modifier silencieusement le comportement d’une installation existante.
 
-### Arguments et environnement
+### Arguments, environnement et wrappers
 
 ```text
 --arg VALUE              Argument à intégrer au launcher, répétable
 --env KEY=VALUE          Variable d’environnement, répétable
+--wrapper COMMAND        Wrapper à placer devant le runner, répétable
 ```
 
-Les valeurs sont shell-quotées et les noms de variables sont validés avant génération.
+Exemple :
+
+```bash
+kalesa ChildOfLight.exe \
+  --runner wine \
+  --wrapper gamemoderun \
+  --wrapper mangohud \
+  --arg -fullscreen \
+  --arg "--language=fr" \
+  --env WINEDEBUG=-all
+```
+
+Les arguments restent des éléments distincts, les variables d’environnement deviennent une map YAML déterministe et les wrappers sont conservés comme une liste ordonnée.
 
 ## Configuration YAML
 
-Kalesa utilise une configuration YAML **versionnée**. Le format actuellement généré est **schema v2**.
+Kalesa utilise une configuration YAML **versionnée**. Le format actuellement généré est **schema v3**.
 
 Exemple :
 
 ```yaml
-schema_version: 2
+schema_version: 3
 name: ChildofLight
 version: null
 developer: null
@@ -75,56 +87,44 @@ runner:
 executable:
   path: /path/to/ChildofLight.exe
 launch:
-  args: []
-  env: []
+  args:
+    - -fullscreen
+    - --language=fr
+  env:
+    WINEDEBUG: -all
+    DXVK_LOG_LEVEL: none
+  wrappers:
+    - gamemoderun
+    - mangohud
 ```
 
-Le schéma v2 ajoute notamment :
+Le schéma v3 conserve `args` comme une liste YAML native et transforme `env` en mapping `KEY: VALUE`. `wrappers` est une liste ordonnée appliquée avant le runner sélectionné.
 
-- `schema_version` pour identifier explicitement le format de configuration ;
-- les métadonnées optionnelles `version`, `developer`, `description` et `categories` ;
-- un runner explicite (`native`, `wine` ou `proton`) avec sa configuration ;
-- la section `launch` pour les arguments et variables d’environnement.
+### Migration v1 → v2 → v3
 
-### Migration v1 → v2
+Kalesa a évolué d’un ancien schéma v1 vers v2 puis v3. Une configuration existante n’est pas réécrite automatiquement : relancer Kalesa sur la cible reste le chemin recommandé pour régénérer les artefacts selon le format actuel.
 
-Kalesa a évolué d’un ancien schéma v1 vers le schéma v2. Une configuration v1 peut notamment ressembler à ceci :
+## Launcher runtime v3
 
-```yaml
-name: ChildofLight
-runner:
-  type: windows
-  wine:
-    prefix: /path/to/.workdir/wine
-    arch: win64
-executable:
-  path: /path/to/ChildofLight.exe
-```
+Le `launch.sh` généré est un runtime Bash strict. Il ne parse pas le YAML au lancement et ne dépend donc pas de `yq`. Les valeurs sont générées depuis le même modèle Rust que `config.yaml` afin d’éviter une divergence de parsing entre générateur et runtime.
 
-Le schéma v2 est celui utilisé par le générateur actuel. Les anciennes façades d’API restent conservées pour la compatibilité avec les points d’entrée historiques de la v0.1.0, mais elles délèguent au générateur v2.
+Le launcher v3 :
 
-Les fichiers de configuration déjà générés par une ancienne version de Kalesa ne sont pas automatiquement réécrits : relancer Kalesa sur la cible permet de régénérer les artefacts selon le format actuel.
-
-## Launcher runtime v2
-
-Le `launch.sh` généré est un **runtime générique** : il ne contient plus le runner, le chemin de l’exécutable, les arguments ou les variables d’environnement en dur. Il lit ces informations depuis `.workdir/config/config.yaml` au moment du lancement.
-
-Le launcher v2 :
-
-- vérifie la présence du YAML et exige `schema_version: 2` ;
-- résout les chemins absolus et les chemins relatifs au dossier du jeu ;
-- lit `runner.type`, `executable.path`, `launch.args` et `launch.env` depuis la configuration ;
-- prend en charge `native`, `wine` et `proton` ;
-- ajoute les arguments passés à `launch.sh` après ceux définis dans la configuration ;
-- applique les variables d’environnement du YAML ;
-- vérifie les dépendances nécessaires au runner choisi ;
-- expose `KALESA_YQ` pour sélectionner un binaire `yq` personnalisé.
+- vérifie la présence du fichier de configuration et utilise explicitement le schema v3 ;
+- résout les chemins absolus et relatifs au dossier du jeu ;
+- représente les arguments et wrappers comme des tableaux Bash ;
+- applique les variables d’environnement sous forme de valeurs shell-quotées ;
+- vérifie les dépendances du runner et des wrappers ;
+- construit la commande complète sans `eval` et sans `sh -c` ;
+- affiche la commande finale avec `echo` avant l’exécution ;
+- conserve les arguments ajoutés directement à `launch.sh` après ceux de la configuration ;
+- utilise `exec` afin de préserver le code de retour du jeu.
 
 Le format du launcher est identifié dans le script généré par :
 
 ```bash
-# Kalesa launcher format: 2
-# Kalesa config schema: 2
+# Kalesa launcher format: 3
+# Kalesa config schema: 3
 ```
 
 ## Génération
@@ -140,8 +140,6 @@ game.desktop
 .directory
 ```
 
-Le fichier `config.yaml` est généré en **schema v2**. Le `launch.sh` est un runtime v2 qui consomme cette configuration au lieu de dupliquer ses valeurs.
-
 ## Détection du binaire
 
 - `\x7fELF` → Linux ; validation minimale de l’en-tête ELF.
@@ -149,16 +147,15 @@ Le fichier `config.yaml` est généré en **schema v2**. Le `launch.sh` est un r
 - `MZ` → PE ; `e_lfanew` puis `PE\0\0` sont obligatoirement présents.
 - tout format inconnu ou tronqué est rejeté.
 
-Le type 2 d’AppImage est conçu comme un exécutable ELF dont le runtime monte ensuite son système de fichiers SquashFS et lance `AppRun`. citehttps://docs.appimage.org/reference/architecture.html
-
 ## Sécurité des launchers
 
 - le YAML est validé par Kalesa avant génération ;
-- les arguments et variables d’environnement sont shell-quotés lors de leur lecture par le runtime ;
+- les arguments et variables d’environnement sont shell-quotés lors de la génération du runtime ;
 - les variables d’environnement utilisent uniquement des noms valides ;
 - les chemins relatifs sont résolus par rapport au dossier du jeu ;
 - les entrées `.desktop` rejettent les retours à la ligne ;
-- un runner Wine/Proton explicitement demandé sur une cible non Windows est rejeté.
+- un runner Wine/Proton explicitement demandé sur une cible non Windows est rejeté ;
+- le launcher n’utilise ni `eval` ni `sh -c` pour construire la commande.
 
 ## Tests
 
@@ -173,7 +170,7 @@ La CI GitHub exécute ces quatre contrôles.
 
 ## Limites connues / pistes futures
 
-- `launch.sh` requiert `yq` v4 au runtime afin de lire le YAML sans embarquer un parseur YAML fragile dans le shell.
+- Le launcher v3 embarque les valeurs issues du YAML au moment de la génération ; modifier manuellement `config.yaml` sans régénérer `launch.sh` ne modifie donc pas le runtime embarqué.
 - L’extraction de ressources internes d’une AppImage n’est pas exécutée automatiquement : Kalesa privilégie les métadonnées `.desktop`, les icônes XDG et les icônes voisines afin de ne pas exécuter/monter une image potentiellement non fiable.
-- Les tests d’intégration du pipeline complet et les fixtures PE/ELF réels restent à ajouter.
-- La gestion de migration automatique de configurations YAML v1 existantes n’est pas encore fournie ; la régénération avec Kalesa reste le chemin recommandé.
+- Les tests d’intégration du pipeline complet et les fixtures PE/ELF réels restent à renforcer.
+- La migration automatique de configurations v1/v2 vers v3 n’est pas encore fournie ; la régénération avec Kalesa reste le chemin recommandé.
